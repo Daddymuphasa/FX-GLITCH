@@ -1,0 +1,6 @@
+# Core engine runs on the standard library + numpy only.
+numpy>=1.26
+
+# Optional: only needed for the data downloaders in tools/
+websockets>=12.0   # tools/fetch_deriv.py  (synthetic indices)
+requests>=2.31     # tools/fetch_gold.py    (XAUUSD)

@@ -1,0 +1,22 @@
+# data & outputs
+data/raw/*.csv
+data/cache/
+reports/*.txt
+reports/*.html
+reports/*.png
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+
+# secrets
+.env
+*.key
+
+# os
+Thumbs.db
+desktop.ini
+.DS_Store
