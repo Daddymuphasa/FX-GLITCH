@@ -23,7 +23,7 @@ import importlib
 import os
 import sys
 
-from fxglitch import data, factors, markets, news, report, simulate
+from fxglitch import data, derivs, factors, markets, news, report, simulate
 from fxglitch.signals import SignalFeed
 from fxglitch.engine import Backtest
 from fxglitch.metrics import analyse
@@ -72,6 +72,10 @@ def main() -> None:
                        help="compute price/volume factors and feed them to the strategy")
     intel.add_argument("--events", metavar="PATH",
                        help="catalyst log (csv/json) to add to the signal feed")
+    intel.add_argument("--funding", metavar="PATH",
+                       help="perp funding csv from tools/fetch_derivs.py")
+    intel.add_argument("--oi", metavar="PATH",
+                       help="open interest csv from tools/fetch_derivs.py")
     intel.add_argument("--explain", metavar="YYYY-MM-DD",
                        help="print the full signal breakdown for one date and exit")
 
@@ -131,17 +135,38 @@ def main() -> None:
     print(f"\nLoaded {symbol}: {data.describe(candles)}")
 
     feed = None
-    if args.signals or args.events:
+    if args.signals or args.events or args.funding or args.oi:
         sigs = factors.all_price_factors(candles) if args.signals else []
+
+        funding = oi = None
+        if args.funding:
+            funding = derivs.load_series_csv(args.funding, 'funding_rate')
+            print(f'Loaded {len(funding):,} funding points')
+        if args.oi:
+            oi = derivs.load_series_csv(args.oi, 'open_interest')
+            span = (oi[-1].time - oi[0].time).days if oi else 0
+            print(f'Loaded {len(oi):,} open-interest points covering {span} days')
+            if span < 180:
+                print('  WARNING: under 6 months of OI. Any OI-based result here')
+                print('  is an anecdote, not validation. See fxglitch/derivs.py.')
+        if funding or oi:
+            d = derivs.all_deriv_factors(candles, funding, oi)
+            sigs += d
+            print(f'Derived {len(d):,} positioning signals')
+
         if args.events:
             loaded = news.load_events(args.events)
             sigs += loaded
             print(f"Loaded {len(loaded)} catalysts from {os.path.basename(args.events)}")
         feed = SignalFeed(sigs)
-        print(f"Signal feed: {len(feed)} signals "
-              f"({'price factors' if args.signals else ''}"
-              f"{' + ' if args.signals and args.events else ''}"
-              f"{'catalysts' if args.events else ''})")
+        parts = []
+        if args.signals:
+            parts.append("price factors")
+        if args.funding or args.oi:
+            parts.append("positioning")
+        if args.events:
+            parts.append("catalysts")
+        print(f"Signal feed: {len(feed):,} signals ({' + '.join(parts)})")
 
     if args.explain:
         if feed is None:

@@ -131,10 +131,9 @@ visible in public open-interest and funding data before and during the cascade.*
 Crowded short positioning is not a secret — it's published continuously and most
 people don't look. That's the asymmetry worth building on.
 
-`squeeze_fuel` in [fxglitch/factors.py](../fxglitch/factors.py) currently
-approximates this from price alone, with confidence deliberately capped at 0.6
-because it's a proxy. Real funding/OI data replaces it and should carry more
-weight.
+`squeeze_fuel` in [fxglitch/factors.py](../fxglitch/factors.py) approximates this
+from price alone, confidence capped at 0.6 because it's a proxy. The real
+version now exists in [fxglitch/derivs.py](../fxglitch/derivs.py) — see below.
 
 ---
 
@@ -154,8 +153,8 @@ more than the number:
 1. **n=69.** Nowhere near enough.
 2. **Confounded.** Every factor in that test is price-derived, so the "evidence"
    is partly correlated with the breakout it's judging. `trend_regime` especially.
-   Genuinely independent signals — funding, ETF flows, on-chain — are the real
-   test, and we don't have them wired yet.
+   Genuinely independent signals are the real test. Funding and open interest
+   are now wired (see below); ETF flows and on-chain are not yet.
 
 Note also that Confluence returned +256% vs Donchian's +94.5% but with
 *identical* expectancy (+0.987 vs +0.998). **That extra return is position
@@ -164,12 +163,88 @@ mistake leverage for edge.
 
 ---
 
+## Positioning data (built)
+
+`fxglitch/derivs.py` + `tools/fetch_derivs.py`.
+
+This is the first input that is **not** derived from price, which is what makes
+it worth more than everything above it. Funding and open interest describe
+*positioning*. They can tell you a rally happened on shorts covering rather than
+new buyers arriving — something price alone cannot say.
+
+### Reading funding
+
+Positive funding = longs pay shorts = crowd is leaning long.
+
+| funding /8h | meaning |
+|---|---|
+| +0.01% | Binance baseline. Means nothing. |
+| > +0.05% | crowd aggressively long, paying to stay |
+| > +0.10% | euphoric — long liquidations become the fuel |
+| < −0.05% | heavily short — this is squeeze fuel |
+
+Contrarian at the extremes, meaningless in the middle. Crowded positioning is
+not a prediction that price falls; it says that *if price rises anyway*,
+somebody is forced to buy.
+
+### Open interest against price — the four quadrants
+
+| price | OI | reading |
+|---|---|---|
+| UP | UP | new longs — genuine trend, real money |
+| UP | **DOWN** | **short squeeze** — violent but exhausts itself |
+| DOWN | UP | new shorts — genuine downtrend |
+| DOWN | DOWN | longs liquidating — capitulation, often a low |
+
+Row two is the whole point of the module. A rally on rising OI and a rally on
+falling OI look **identical on a chart** and mean opposite things.
+
+### Live snapshot
+
+```bash
+python tools/fetch_derivs.py --snapshot
+```
+
+Works with no API key via CoinGecko, reachable on almost any network. Reading it
+today, right after the +26% run:
+
+```
+TOTAL open interest        40,375,599,698
+Average funding   +0.0081% per 8h  (+8.9% annualised)
+
+READ: funding is at baseline. Positioning is NOT crowded either
+way, so it carries no contrarian information right now.
+```
+
+That is genuinely useful: a 26% rally that did **not** leave the book crowded
+long. Had funding been at +0.10% after that run, it would read as a long-squeeze
+warning instead.
+
+### The data constraint you cannot engineer around
+
+| | availability |
+|---|---|
+| funding history | Binance back to 2019, free and complete |
+| **open interest** | **free endpoints return ~30 days only** |
+
+So funding factors can be backtested properly today. **OI factors cannot.** Any
+OI result from 30 days is an anecdote, and `run.py` prints a warning below six
+months rather than letting you forget. `fetch_derivs.py` appends on each run —
+schedule it daily and you build real history from today forward.
+
+The 20 tests in [tests/test_derivs.py](../tests/test_derivs.py) verify the
+classification logic on synthetic series. They prove the code is *correct*.
+They prove nothing about edge — that needs real data.
+
+---
+
 ## Next, in priority order
 
-1. **Funding rate + open interest feed.** The highest-value missing input, free
-   from exchange APIs, and the only honest way to measure squeeze setups.
-2. **ETF flow log.** Published daily, `available_at` = publication + 1 day.
-3. **Prospective catalyst logging.** Log every candidate catalyst as it happens,
-   *including* the ones that go nowhere. This is the only path to real weights.
-4. **Replace the priors in `news.py`** with measured values from event studies.
-5. **Walk-forward validation** — fit weights on 2015–2022, test on 2023–2026.
+1. **Schedule `fetch_derivs.py --oi` daily.** Nothing else unlocks OI backtesting;
+   history only accrues from the day you start.
+2. **Backtest the funding factors on real history** — this is possible *now*, back
+   to 2019, and is the first genuinely independent test of the whole thesis.
+3. **ETF flow log.** Published daily, `available_at` = publication + 1 day.
+4. **Prospective catalyst logging** — every candidate, *including* the duds.
+5. **Replace the priors in `news.py`** with measured values from event studies.
+6. **Walk-forward validation** — fit weights on 2015–2022, test on 2023–2026.
