@@ -220,18 +220,21 @@ fxglitch/          the engine
   signals.py       the intelligence layer, point-in-time safe
   factors.py       signals derived from price and volume
   derivs.py        funding rates and open interest - positioning, not price
+  macro.py         yields, dollar, equities - one factor, and that is on purpose
   news.py          catalyst logging and priors
 strategies/        one file per strategy (the code)
 tools/
   fetch_crypto.py  real OHLCV, no API key (binance/bybit/yahoo fallback)
   fetch_derivs.py  perp funding + open interest, and a live positioning snapshot
+  fetch_macro.py   Treasury yields, DXY, VIX, equities, gold - no API key
+  macro_check.py   does any macro move actually predict the asset?
   sweep.py         parameter sweep - the curve-fit detector
   event_study.py   does this catalyst actually have edge?
 docs/strategies/   one file per strategy (the explanation)
 docs/INTELLIGENCE.md   how the news/macro layer works and why
 data/raw/          your csv files (gitignored)
 data/events/       catalyst logs
-tests/             65 tests - run before trusting anything
+tests/             80 tests - run before trusting anything
 run.py             the runner
 ```
 

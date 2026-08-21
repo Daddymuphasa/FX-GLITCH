@@ -1,5 +1,6 @@
-# data & outputs
+# data & outputs - all of it is re-fetchable, none of it belongs in git
 data/raw/*.csv
+data/raw/**/*.csv
 data/cache/
 reports/*.txt
 reports/*.html

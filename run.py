@@ -23,7 +23,7 @@ import importlib
 import os
 import sys
 
-from fxglitch import data, derivs, factors, markets, news, report, simulate
+from fxglitch import data, derivs, factors, macro, markets, news, report, simulate
 from fxglitch.signals import SignalFeed
 from fxglitch.engine import Backtest
 from fxglitch.metrics import analyse
@@ -76,6 +76,9 @@ def main() -> None:
                        help="perp funding csv from tools/fetch_derivs.py")
     intel.add_argument("--oi", metavar="PATH",
                        help="open interest csv from tools/fetch_derivs.py")
+    intel.add_argument("--macro", nargs="?", const="data/raw/macro", metavar="DIR",
+                       help="add macro context and the risk-off filter "
+                            "(default dir data/raw/macro)")
     intel.add_argument("--explain", metavar="YYYY-MM-DD",
                        help="print the full signal breakdown for one date and exit")
 
@@ -135,7 +138,7 @@ def main() -> None:
     print(f"\nLoaded {symbol}: {data.describe(candles)}")
 
     feed = None
-    if args.signals or args.events or args.funding or args.oi:
+    if args.signals or args.events or args.funding or args.oi or args.macro:
         sigs = factors.all_price_factors(candles) if args.signals else []
 
         funding = oi = None
@@ -154,6 +157,16 @@ def main() -> None:
             sigs += d
             print(f'Derived {len(d):,} positioning signals')
 
+        if args.macro:
+            m = macro.load_macro_dir(args.macro)
+            if m:
+                mf = macro.all_macro_factors(m)
+                sigs += mf
+                print(f"Loaded {len(m)} macro series -> {len(mf):,} risk-off signals")
+                print(f"  latest: {macro.context_line(m)}")
+            else:
+                print(f"No macro csvs in {args.macro} - run tools/fetch_macro.py")
+
         if args.events:
             loaded = news.load_events(args.events)
             sigs += loaded
@@ -164,6 +177,8 @@ def main() -> None:
             parts.append("price factors")
         if args.funding or args.oi:
             parts.append("positioning")
+        if args.macro:
+            parts.append("macro")
         if args.events:
             parts.append("catalysts")
         print(f"Signal feed: {len(feed):,} signals ({' + '.join(parts)})")

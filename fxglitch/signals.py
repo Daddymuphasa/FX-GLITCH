@@ -226,17 +226,37 @@ class SignalFeed:
 
 # How much each family counts toward the combined read.
 #
-# These are a starting point, not a discovery. MACRO and FLOW lead because
-# liquidity and real buying are what actually move price; SENTIMENT trails
-# because by the time retail sentiment is measurable it is usually the move,
-# not the cause of it. Re-derive these from your own event studies rather than
-# trusting the defaults - `tools/event_study.py` exists for that.
+# MACRO WAS DEMOTED FROM 1.5 TO 0.4 BY MEASUREMENT, NOT OPINION.
+#
+# The first draft of this table had MACRO at 1.5 - the highest weight - on the
+# entirely reasonable-sounding grounds that liquidity conditions drive risk
+# assets. Then tools/macro_check.py tested it over 12 years:
+#
+#   BTC: 16 conditions across 8 macro series. ZERO predicted outperformance.
+#        Four showed a real but NEGATIVE edge. Twelve were noise.
+#   ETH: same test, 1 of 16 positive (n=52, and noise on BTC - which is what
+#        one expects from 32 comparisons by chance alone).
+#
+# That included the specific claim this repo was asked to encode: the 30-year
+# yield fell -0.09 on 19 August 2026, a genuine 3rd-percentile move, hours
+# before BTC ran +7%. Across 129 comparable drops in 12 years, BTC's forward
+# return was slightly BELOW its own baseline at 1, 3, 5 and 10 days.
+#
+# So macro stays in the system as CONTEXT - it is genuinely useful for
+# understanding what happened and for risk-off filtering - but it does not get
+# to move size on the strength of a good story. If you find a better macro
+# formulation, prove it with macro_check.py first and raise this number then.
+#
+# The rest of these remain PRIORS, i.e. guesses awaiting the same treatment.
+# POSITIONING leads now because funding and open interest are the only inputs
+# here that are independent of price. Re-derive all of them; do not inherit
+# them.
 DEFAULT_WEIGHTS: dict[Kind, float] = {
-    Kind.MACRO: 1.5,
-    Kind.FLOW: 1.3,
-    Kind.REGULATORY: 1.2,
-    Kind.POSITIONING: 1.0,
-    Kind.ONCHAIN: 0.9,
-    Kind.TECHNICAL: 0.8,
-    Kind.SENTIMENT: 0.4,
+    Kind.POSITIONING: 1.3,   # independent of price - the most promising input
+    Kind.FLOW: 1.2,          # untested prior: real buying should matter
+    Kind.REGULATORY: 1.0,    # untested prior
+    Kind.ONCHAIN: 0.9,       # untested prior
+    Kind.TECHNICAL: 0.8,     # measured: weak positive, but confounded with price
+    Kind.MACRO: 0.4,         # MEASURED: no predictive edge found. Context only.
+    Kind.SENTIMENT: 0.4,     # untested prior
 }

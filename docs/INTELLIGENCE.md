@@ -238,13 +238,84 @@ They prove nothing about edge — that needs real data.
 
 ---
 
+## Macro: the measurement that changed the design
+
+Your research said the trigger was the 30-year Treasury yield spiking to
+2007 levels, prompting the buyback intervention. **The data confirms that
+precisely.**
+
+| date | 30y yield | BTC |
+|---|---|---|
+| 08-14 | 5.26 | 62,976 |
+| **08-17** | **5.31** ← 12-year high, 100th percentile | 64,506 |
+| 08-18 | 5.28 | 64,681 |
+| **08-19** | **5.19** ← −0.09, a 3rd-percentile drop | **69,266** |
+| 08-21 | 5.27 | 77,418 |
+
+The yield hit its highest level in our entire 12 years of data on 8/17, then
+fell hard on 8/19 — the exact day BTC ran +7.1%. The causal story is coherent
+and the timing is real.
+
+### Then I tested whether it generalises
+
+Across **129 comparable 30-year yield drops in 12 years**, BTC's forward return
+was *below* its own baseline at every horizon:
+
+| horizon | BTC after drop | baseline | edge |
+|---|---|---|---|
+| 1d | −0.24% | +0.21% | −0.44% |
+| 3d | +0.12% | +0.61% | −0.50% |
+| 5d | +0.71% | +1.02% | −0.31% |
+| 10d | +1.60% | +2.06% | −0.47% |
+
+So I widened it — 16 conditions across 8 macro series, on two assets:
+
+| | conditions | positive edge | negative edge | noise |
+|---|---|---|---|---|
+| BTC | 16 | **0** | 4 | 12 |
+| ETH | 16 | 1 (n=52, noise on BTC) | 5 | 10 |
+
+**Not one macro condition predicted crypto outperformance.**
+
+This is the survivorship trap from the section above, made concrete with real
+data. You only ever read about the Treasury announcement that *preceded* a
+rally. The other 128 were never written up, so the base rate stays invisible
+until you compute it. The story about 19 August may well be true. It is simply
+not a rule.
+
+### What survived, and what changed because of it
+
+One effect replicated on both assets: after a bottom-5% day in the S&P or
+Nasdaq, crypto **underperforms** its baseline by more than one standard error
+(BTC −1.17%/−1.23%, ETH −0.81%/−0.80%).
+
+Note the asymmetry — equity *rallies* showed nothing on either asset. Crypto
+catches the falling knife and doesn't catch the bounce. So it belongs in
+position *sizing* as a reason to take less risk, never as a reason to enter.
+`risk_off_contagion` in [fxglitch/macro.py](../fxglitch/macro.py) is the only
+macro factor in the repo, and it can only ever produce a negative score.
+
+**The measurement changed a default in the code.** `DEFAULT_WEIGHTS` originally
+had `MACRO: 1.5` — the *highest* weight — on reasonable-sounding grounds about
+liquidity driving risk assets. It is now `0.4`, and
+[tests/test_macro.py](../tests/test_macro.py) asserts it stays there, so nobody
+can quietly restore it without a test failing and forcing the question.
+
+That is the repo working as intended: a compelling story lost to a measurement.
+
+---
+
 ## Next, in priority order
 
-1. **Schedule `fetch_derivs.py --oi` daily.** Nothing else unlocks OI backtesting;
+1. **Backtest the funding factors on real history.** Now the single highest-value
+   test in the project. Macro is measured and mostly dead; positioning is the
+   remaining candidate for a genuinely independent edge, and Binance serves
+   funding history back to 2019 for free. Blocked from my sandbox — run
+   `python tools/fetch_derivs.py BTCUSDT --years 6 --oi` locally.
+2. **Schedule `fetch_derivs.py --oi` daily.** Nothing else unlocks OI backtesting;
    history only accrues from the day you start.
-2. **Backtest the funding factors on real history** — this is possible *now*, back
-   to 2019, and is the first genuinely independent test of the whole thesis.
 3. **ETF flow log.** Published daily, `available_at` = publication + 1 day.
+   Worth testing against the same baseline discipline that killed macro.
 4. **Prospective catalyst logging** — every candidate, *including* the duds.
 5. **Replace the priors in `news.py`** with measured values from event studies.
 6. **Walk-forward validation** — fit weights on 2015–2022, test on 2023–2026.
