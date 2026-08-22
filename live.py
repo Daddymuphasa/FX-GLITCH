@@ -44,6 +44,7 @@ from fxglitch.live.portfolio import ExposureLimits
 from fxglitch.live.screener import ScreenRules
 from fxglitch.live.runner import INTERVAL_SECONDS, Runner
 from fxglitch.live.state import State
+from fxglitch.store import DEFAULT_ROOT, CandleStore
 from fxglitch.venues.base import VenueError
 from fxglitch.venues.bitunix import Bitunix
 from run import coerce, load_strategy
@@ -104,6 +105,9 @@ def main() -> None:
     gate.add_argument("--max-directional", type=float, default=60.0, metavar="PCT",
                       help="BTC-equivalent notional on one side, as %% of equity")
 
+    p.add_argument("--candles", default=DEFAULT_ROOT, metavar="DIR",
+                   help="candle store; only new bars are fetched each cycle. "
+                        "Pass 'none' to refetch everything every time.")
     p.add_argument("--paper-equity", type=float, default=1000.0, metavar="USDT",
                    help="assumed balance for dry-run when no API key is set")
     p.add_argument("--state", default="data/live_state.json",
@@ -161,7 +165,9 @@ def main() -> None:
                         max_directional_pct=args.max_directional,
                         max_same_direction=args.max_same_direction),
                     driver=args.driver, regime_period=args.regime_period,
-                    use_gate=not args.no_gate)
+                    use_gate=not args.no_gate,
+                    store=(None if args.candles.lower() == "none"
+                           else CandleStore(args.candles)))
 
     mode = "LIVE - orders will be sent" if args.live else "dry-run - nothing will be sent"
     print(f"\n{StrategyClass.name}")

@@ -269,6 +269,18 @@ fxglitch/          the engine
   derivs.py        funding rates and open interest - positioning, not price
   macro.py         yields, dollar, equities - one factor, and that is on purpose
   news.py          catalyst logging and priors
+  store.py         candle history on disk - fetch once, keep forever
+  walkforward.py   fit on the past, trade the future, repeat
+venues/            one module per place we can send an order
+  base.py          the contract every venue implements
+  bitunix.py       USDT-M perpetual futures - venue one
+live/              turning a backtested strategy into a running process
+  runner.py        the loop: closed bar in, guarded order out
+  guards.py        the reasons to refuse
+  state.py         what survives a crash, and ids that make a retry safe
+  screener.py      625 symbols in one request, not 625
+  regime.py        BTC as the master switch for everything that follows it
+  portfolio.py     counting the bet, not the number of tickets
 strategies/        one file per strategy (the code)
 tools/
   fetch_crypto.py  real OHLCV, no API key (binance/bybit/yahoo fallback)
@@ -277,13 +289,16 @@ tools/
   macro_check.py   does any macro move actually predict the asset?
   sweep.py         parameter sweep - the curve-fit detector
   walkforward.py   fit on the past, trade the future, repeat - the real test
+  sync_candles.py  build local history; the longer it runs the more is measurable
+  bitunix_check.py read-only check that the client agrees with the exchange
   event_study.py   does this catalyst actually have edge?
 docs/strategies/   one file per strategy (the explanation)
 docs/INTELLIGENCE.md   how the news/macro layer works and why
 data/raw/          your csv files (gitignored)
 data/events/       catalyst logs
-tests/             99 tests - run before trusting anything
-run.py             the runner
+tests/             235 tests - run before trusting anything
+run.py             the backtest runner
+live.py            the live runner - dry-run unless you pass --live
 ```
 
 Run the tests:

@@ -55,6 +55,7 @@ from decimal import Decimal
 
 from ..data import Candle
 from ..engine import LONG, SHORT, Strategy, Trade
+from ..store import CandleStore
 from ..venues.base import (
     Balance, OrderRequest, Position, Venue, VenueError,
 )
@@ -141,7 +142,8 @@ class Runner:
                  screen_rules: "ScreenRules | None" = None,
                  exposure_limits: "ExposureLimits | None" = None,
                  driver: str = "BTCUSDT", regime_period: int = 50,
-                 use_gate: bool = True) -> None:
+                 use_gate: bool = True,
+                 store: "CandleStore | None" = None) -> None:
         self.venue = venue
         self.strategy_class = strategy_class
         self.symbols = symbols
@@ -159,6 +161,11 @@ class Runner:
         self.regime_period = regime_period
         self.use_gate = use_gate
         self.regime = Regime(regime_mod.NEUTRAL, detail="not measured yet")
+        # With a store, each cycle fetches only the bars that are new. Without
+        # one, every cycle re-downloads the full history for every symbol,
+        # which is what makes a ten-symbol scan expensive enough to get
+        # rate-limited.
+        self.store = store
 
     def _account(self) -> tuple[Balance, list[Position]]:
         """The account, or a plausible stand-in for one.
@@ -244,13 +251,18 @@ class Runner:
         log.info("%s", summarise(tickers, chosen, self.screen_rules))
         return [t.symbol for t in chosen]
 
+    def _candles(self, symbol: str, want: int) -> list[Candle]:
+        """Bars for a symbol, through the store when there is one."""
+        if self.store is None:
+            return self.venue.candles(symbol, self.interval, limit=want)
+        return self.store.sync(self.venue, symbol, self.interval, want)
+
     def _measure_regime(self) -> Regime:
         """Read the driver once per cycle, before judging anything that follows it."""
         if not self.use_gate:
             return Regime(regime_mod.NEUTRAL, detail="gate disabled")
         try:
-            bars = self.venue.candles(self.driver, self.interval,
-                                      limit=max(self.regime_period + 5, 60))
+            bars = self._candles(self.driver, max(self.regime_period + 5, 60))
         except VenueError as exc:
             # Unknown regime must not read as a permissive one. NEUTRAL allows
             # both directions, so failing to read BTC would quietly disable the
@@ -278,7 +290,7 @@ class Runner:
     def _one(self, symbol: str, positions: list[Position],
              stops: dict[str, float], balance: Balance,
              now: datetime) -> Decision:
-        candles = self.venue.candles(symbol, self.interval, limit=self.history)
+        candles = self._candles(symbol, self.history)
         if not candles:
             return Decision(symbol, now, "blocked", "no candles returned")
 

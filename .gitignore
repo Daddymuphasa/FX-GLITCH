@@ -21,3 +21,7 @@ venv/
 Thumbs.db
 desktop.ini
 .DS_Store
+
+# local candle history - re-fetchable, and large
+data/candles/
+data/live_state.json
