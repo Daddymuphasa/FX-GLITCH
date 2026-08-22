@@ -318,4 +318,45 @@ That is the repo working as intended: a compelling story lost to a measurement.
    Worth testing against the same baseline discipline that killed macro.
 4. **Prospective catalyst logging** — every candidate, *including* the duds.
 5. **Replace the priors in `news.py`** with measured values from event studies.
-6. **Walk-forward validation** — fit weights on 2015–2022, test on 2023–2026.
+6. ~~**Walk-forward validation**~~ — built: [tools/walkforward.py](../tools/walkforward.py).
+   See below. The signal *weights* have still never been walk-forwarded, only the
+   price-action parameters; that is the remaining piece.
+
+---
+
+## Walk-forward: what optimisation actually costs
+
+Built and run on daily BTC. The result reframes how to read every other number
+in this repo.
+
+| | expectancy |
+|---|---|
+| in-sample, best channel length per fold | **+1.427 R** |
+| out-of-sample, the setting you'd have picked | **+0.281 R** |
+| optimism gap | **+1.146 R** |
+
+The strategy kept roughly a fifth of what the backtest promised. That gap is not
+a flaw in this strategy — it is the standing tax on choosing settings after
+seeing the answer, and the right discount to apply to any backtest, including
+the +0.998R headline in the README.
+
+Then the control arm, which is the finding that matters:
+
+| | expectancy |
+|---|---|
+| refit the channel length every fold | +0.281 R |
+| **never optimise at all, same windows** | **+0.410 R** |
+
+**Tuning was worth −0.129 R per trade.** The winning setting changed at 50% of
+handovers; the search was fitting the last window's noise and carrying it into
+the next one. `entry=55` — a default chosen because the Turtles traded it in the
+1980s, not because it won a search — beat the optimiser on data neither had seen.
+
+This is the same lesson as the macro section, arriving from the other direction.
+There, a compelling story lost to a measurement. Here, a compelling *procedure*
+did. Both times the thing that survived was the boring prior.
+
+The direct consequence for the intelligence layer: `DEFAULT_WEIGHTS` are priors,
+and the temptation to fit them to history is exactly the move that just measured
+negative on price parameters — where there is far more data and a far simpler
+search space. Fit the weights and expect worse than −0.129 R, not better.

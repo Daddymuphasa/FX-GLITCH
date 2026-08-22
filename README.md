@@ -163,6 +163,53 @@ Under 100 trades, treat every number as noise.
 
 ---
 
+## Every number above this line is flattered. Here is by how much
+
+The `+0.998 R` daily BTC result quoted earlier is real, and it is also not a forecast.
+It was measured on data that was already in front of us when we chose what to test.
+
+`tools/walkforward.py` removes that privilege. It fits on one window, trades the window
+*after* it having seen none of it, rolls forward and repeats:
+
+```bash
+python tools/walkforward.py donchian_breakout --csv data/raw/btcusdt_1d.csv     --market binance-spot --vary entry=20,35,55,80,120
+```
+
+```
+ fold  train              picked      IS       out-of-sample       n     OOS
+    1  2015-08..2020-01   entry=55  +1.828     2020-01..2021-05   10  +0.726
+    2  2015-08..2021-05   entry=55  +1.560     2021-05..2022-09    7  +0.637
+    3  2015-08..2022-09   entry=55  +1.413     2022-09..2023-12   10  +0.137
+    4  2015-08..2023-12   entry=20  +1.261     2024-01..2025-04   17  -0.062
+    5  2015-08..2025-04   entry=55  +1.074     2025-04..2026-08    7  +0.329
+
+   out-of-sample       +0.281 R over 51 trades
+   in-sample best      +1.427 R
+   OPTIMISM GAP        +1.146 R
+```
+
+**The strategy kept about a fifth of what the backtest promised.** It is still positive,
+which is more than most rules manage, but +1.15R is the size of the tax on choosing your
+settings after seeing the answer. Apply that discount to every backtest anyone shows you,
+this repo's included.
+
+Then the part worth the whole tool:
+
+```
+   never optimised     +0.410 R over 42 trades, same windows
+   TUNING WAS WORTH    -0.129 R per trade
+```
+
+Refitting the channel length every fold did **worse** than never touching it. The search
+was finding last window's noise and carrying it into the next one. The default `entry=55`,
+picked because the Turtles used it in the 1980s and not because it won a search, beat the
+optimiser on data neither had seen.
+
+That is the most useful thing this repo has measured: *the tuning you were about to do is
+the part that does not survive.*
+
+---
+
 ## Adding a strategy
 
 Copy [strategies/ema_cross.py](strategies/ema_cross.py). Each file defines a class with two
@@ -229,12 +276,13 @@ tools/
   fetch_macro.py   Treasury yields, DXY, VIX, equities, gold - no API key
   macro_check.py   does any macro move actually predict the asset?
   sweep.py         parameter sweep - the curve-fit detector
+  walkforward.py   fit on the past, trade the future, repeat - the real test
   event_study.py   does this catalyst actually have edge?
 docs/strategies/   one file per strategy (the explanation)
 docs/INTELLIGENCE.md   how the news/macro layer works and why
 data/raw/          your csv files (gitignored)
 data/events/       catalyst logs
-tests/             80 tests - run before trusting anything
+tests/             99 tests - run before trusting anything
 run.py             the runner
 ```
 
