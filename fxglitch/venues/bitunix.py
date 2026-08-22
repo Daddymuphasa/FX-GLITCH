@@ -57,7 +57,31 @@ from .base import (
 )
 
 BASE_URL = "https://fapi.bitunix.com"
-USER_AGENT = "Mozilla/5.0 (FX-GLITCH)"
+# Cloudflare fronts this API and profiles the client. A bare or obviously
+# scripted agent gets challenged; a burst of requests gets challenged harder.
+# This is not evasion of a rate limit - their documented limit is 10/sec/ip and
+# we stay far under it - it is looking like an ordinary HTTP client rather than
+# something worth interrogating.
+# An honest, identifying agent. Counter-intuitively this passes where a full
+# Chrome string does not: claiming to be Chrome without any of the headers a
+# real Chrome sends is a mismatch worth challenging, whereas a plainly-labelled
+# API client is not pretending to be anything.
+USER_AGENT = "Mozilla/5.0 (FX-GLITCH research client)"
+
+# Seconds to leave between requests. Their documented limit is 10/sec/ip and
+# this is nowhere near it, because the constraint that actually bites is
+# Cloudflare's bot scoring rather than the quota.
+#
+# MEASURED, the hard way: a scan of 3 symbols at 2 kline pages each - about 8
+# requests in 2 seconds - was enough to earn a challenge that then lasted well
+# over two minutes and survived a change of user agent. It is an IP-level
+# cooldown, and further requests extend it.
+#
+# The consequence for the platform is architectural, not cosmetic: per-symbol
+# scanning does not scale to a 625-symbol universe. Screening has to come from
+# the single-call endpoints (get_tickers returns every symbol at once), with
+# klines fetched only for the handful that pass. See the note in universe().
+MIN_REQUEST_INTERVAL = 0.5
 
 # Their interval strings happen to match ours; mapped explicitly anyway so a
 # change on their side becomes a KeyError here rather than an empty result.
@@ -103,6 +127,40 @@ def sign_request(api_key: str, secret_key: str, nonce: str, timestamp: str,
     return hashlib.sha256((digest + secret_key).encode()).hexdigest()
 
 
+def _short(raw: str) -> str:
+    """One readable line out of whatever came back.
+
+    An HTML error page pasted into a log entry buries the actual problem under
+    a screenful of markup, and every symbol in the scan repeats it.
+    """
+    text = " ".join(raw.split())
+    return text[:160] + ("..." if len(text) > 160 else "")
+
+
+def _parse(raw: str) -> dict:
+    """JSON, or a named error for the things that are not JSON.
+
+    Cloudflare answers with an HTML challenge page rather than an API error,
+    and reported raw it looks like a broken endpoint or a bad key. It is
+    neither - it is a transient block, it clears on its own, and it is
+    retryable. Naming it saves the hour spent debugging the wrong thing.
+    """
+    try:
+        return json.loads(raw)
+    except ValueError:
+        head = raw.lstrip()[:400].lower()
+        if "just a moment" in head or "cf-browser-verification" in head or "<!doctype html" in head:
+            raise VenueError(
+                "bitunix", "cloudflare",
+                "blocked by Cloudflare's bot check. The API and your key are "
+                "fine - this is a cooldown on the IP, it can last several "
+                "minutes, and retrying hard makes it longer. Wait it out.",
+                retryable=True,
+            ) from None
+        raise VenueError("bitunix", "malformed",
+                         f"expected JSON, got: {_short(raw)}") from None
+
+
 def _compact(payload: dict) -> str:
     """JSON with every space removed - what the signature is computed over."""
     return json.dumps(payload, separators=(",", ":"))
@@ -113,15 +171,18 @@ def _urlopen_transport(method: str, url: str, headers: dict, body: str | None) -
     req = urllib.request.Request(url, data=data, headers=headers, method=method)
     try:
         with urllib.request.urlopen(req, timeout=20) as r:
-            return json.loads(r.read().decode())
+            raw = r.read().decode()
+            return _parse(raw)
     except urllib.error.HTTPError as exc:
         # Their errors arrive as a JSON body under a non-200 status; the body is
         # far more useful than the status, so surface it rather than the code.
         raw = exc.read().decode(errors="replace")
         try:
-            return json.loads(raw)
+            return _parse(raw)
+        except VenueError:
+            raise
         except ValueError:
-            raise VenueError("bitunix", exc.code, raw[:300],
+            raise VenueError("bitunix", exc.code, _short(raw),
                              retryable=exc.code >= 500) from None
     except urllib.error.URLError as exc:
         raise VenueError("bitunix", "network", str(exc.reason), retryable=True) from None
@@ -148,6 +209,7 @@ class Bitunix(Venue):
         self._transport = transport
         self._instruments: dict[str, Instrument] | None = None
         self._position_mode: str | None = None
+        self._last_request_at = 0.0
 
     # --- plumbing ------------------------------------------------------
 
@@ -192,8 +254,21 @@ class Bitunix(Venue):
                                      query, body),
             })
 
+        self._pace()
         response = self._transport(method, url, headers, body or None)
         return self._unwrap(response)
+
+    def _pace(self) -> None:
+        """Leave a gap between requests.
+
+        A scan across many symbols is a burst, and a burst is what gets
+        challenged. Sleeping a quarter second costs nothing on a daily
+        strategy and keeps the scan from being interrupted halfway through.
+        """
+        gap = time.monotonic() - self._last_request_at
+        if gap < MIN_REQUEST_INTERVAL:
+            time.sleep(MIN_REQUEST_INTERVAL - gap)
+        self._last_request_at = time.monotonic()
 
     @staticmethod
     def _unwrap(response: dict) -> dict:
@@ -443,6 +518,65 @@ class Bitunix(Venue):
             client_id=str(data.get("clientId", order.client_id)),
             raw=data if isinstance(data, dict) else {},
         )
+
+    def stops(self, symbol: str | None = None) -> dict[str, float]:
+        """Current stop price per positionId, read from the exchange.
+
+        Needed because `positions()` does not report the stop, and a trailing
+        stop has to be compared against what is actually resting there. Our own
+        memory of it is a belief; this is the record.
+
+        DOC CAVEAT: Cloudflare blocks the tp_sl doc pages to non-browser
+        clients, so the field names below come from search results rather than
+        a page I could read end to end. Parsing is therefore defensive - an
+        unexpected shape yields "no stop known" instead of a crash, and the
+        caller treats that as a reason to be careful rather than as zero.
+        """
+        rows = self._request("GET", "/api/v1/futures/tpsl/get_pending_orders",
+                             query={"symbol": symbol}, private=True)
+        out: dict[str, float] = {}
+        for row in rows or []:
+            pid = str(row.get("positionId", "") or "")
+            raw = row.get("slPrice") or row.get("stopLossPrice")
+            if not pid or raw in (None, "", "0"):
+                continue
+            try:
+                out[pid] = float(raw)
+            except (TypeError, ValueError):
+                continue
+        return out
+
+    def set_stop(self, position: Position, stop_price: Decimal | float) -> OrderResult:
+        """Move the stop on an open position.
+
+        Tries modify first, then place. A position opened with `slPrice`
+        already has a resting stop to modify, but one opened by hand in the app
+        may not, and the difference is not visible from here. Trying both in
+        order costs one wasted call in the uncommon case and avoids silently
+        failing to protect a position in the other.
+        """
+        if not position.venue_id:
+            raise VenueError("bitunix", "no-position-id",
+                             f"cannot move the stop on {position.symbol} without "
+                             f"a positionId")
+        instrument = self.instruments().get(position.symbol)
+        price = (instrument.round_price(stop_price) if instrument
+                 else Decimal(str(stop_price)))
+        payload = {
+            "symbol": position.symbol,
+            "positionId": position.venue_id,
+            "slPrice": str(price),
+            "slStopType": "MARK_PRICE",
+        }
+        try:
+            data = self._request("POST", "/api/v1/futures/tpsl/position/modify_order",
+                                 payload=payload, private=True)
+        except VenueError:
+            data = self._request("POST", "/api/v1/futures/tpsl/position/place_order",
+                                 payload=payload, private=True)
+        return OrderResult(accepted=True,
+                           venue_order_id=str((data or {}).get("orderId", "")),
+                           raw=data if isinstance(data, dict) else {})
 
     def close(self, position: Position, *, reason: str = "") -> OrderResult:
         """Flatten a position with a reduce-only market order in the other direction."""
