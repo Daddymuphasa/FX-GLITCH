@@ -332,6 +332,23 @@ class Bitunix(Venue):
         syms.sort(key=lambda s: (s != lead, s))
         return syms
 
+    def tickers(self, symbols: list[str] | None = None):
+        """Every symbol's price and 24h stats in ONE request.
+
+        This is the endpoint that makes a 625-symbol universe tractable. The
+        alternative - a kline call per symbol - is 625 requests, and roughly
+        eight in two seconds is enough to earn a Cloudflare cooldown lasting
+        minutes. One call here, then klines for the handful that survive.
+
+        Field names are resolved defensively in screener.py, because the doc
+        page for this endpoint sits behind the same bot check that blocks the
+        client and could not be read end to end.
+        """
+        from ..live.screener import parse_tickers
+        query = {"symbols": ",".join(symbols)} if symbols else None
+        return parse_tickers(self._request(
+            "GET", "/api/v1/futures/market/tickers", query=query))
+
     def candles(self, symbol: str, interval: str = "1d", limit: int = 200) -> list[Candle]:
         """Closed candles, oldest first.
 

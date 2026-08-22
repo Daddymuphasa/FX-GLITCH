@@ -58,8 +58,11 @@ from ..engine import LONG, SHORT, Strategy, Trade
 from ..venues.base import (
     Balance, OrderRequest, Position, Venue, VenueError,
 )
-from . import guards
+from . import guards, portfolio, regime as regime_mod
 from .guards import Limits, Verdict
+from .portfolio import ExposureLimits
+from .regime import Regime
+from .screener import ScreenRules, parse_tickers, screen, summarise
 from .state import State, client_id
 
 log = logging.getLogger("fxglitch.live")
@@ -134,7 +137,11 @@ class Runner:
                  interval: str = "1d", params: dict | None = None,
                  limits: Limits | None = None, state: State | None = None,
                  history: int = 400, live: bool = False, feed=None,
-                 paper_equity: float = 1000.0) -> None:
+                 paper_equity: float = 1000.0,
+                 screen_rules: "ScreenRules | None" = None,
+                 exposure_limits: "ExposureLimits | None" = None,
+                 driver: str = "BTCUSDT", regime_period: int = 50,
+                 use_gate: bool = True) -> None:
         self.venue = venue
         self.strategy_class = strategy_class
         self.symbols = symbols
@@ -146,6 +153,12 @@ class Runner:
         self.live = live
         self.feed = feed
         self.paper_equity = paper_equity
+        self.screen_rules = screen_rules
+        self.exposure_limits = exposure_limits or ExposureLimits()
+        self.driver = driver
+        self.regime_period = regime_period
+        self.use_gate = use_gate
+        self.regime = Regime(regime_mod.NEUTRAL, detail="not measured yet")
 
     def _account(self) -> tuple[Balance, list[Position]]:
         """The account, or a plausible stand-in for one.
@@ -188,9 +201,14 @@ class Runner:
             return [Decision("-", now, "blocked", daily.reason)]
 
         stops = self._read_stops()
+        symbols = self._shortlist()
+        self.regime = self._measure_regime()
+        if self.use_gate:
+            log.info("%s", self.regime.detail or f"BTC regime {self.regime.state}")
+        log.info("%s", portfolio.describe(portfolio.measure(positions), balance.equity))
 
         decisions = []
-        for symbol in self.symbols:
+        for symbol in symbols:
             try:
                 decisions.append(self._one(symbol, positions, stops, balance, now))
             except VenueError as exc:
@@ -200,6 +218,48 @@ class Runner:
                 decisions.append(Decision(symbol, now, "blocked", str(exc)))
         self.state.save()
         return decisions
+
+    def _shortlist(self) -> list[str]:
+        """Which symbols get the expensive per-symbol calls this cycle.
+
+        With no screen rules this is just the configured list. With them, one
+        request covers the whole universe and only the survivors cost anything
+        further - which is the difference between a scan that completes and one
+        that earns a bot-check cooldown at symbol eight.
+        """
+        if self.screen_rules is None:
+            return self.symbols
+        reader = getattr(self.venue, "tickers", None)
+        if reader is None:
+            log.warning("venue has no tickers endpoint - falling back to the "
+                        "configured symbol list")
+            return self.symbols
+        try:
+            tickers = reader()
+        except VenueError as exc:
+            # A failed screen must not silently become "trade everything".
+            log.error("screen failed (%s) - falling back to the configured list", exc)
+            return self.symbols
+        chosen = screen(tickers, self.venue.instruments(), self.screen_rules)
+        log.info("%s", summarise(tickers, chosen, self.screen_rules))
+        return [t.symbol for t in chosen]
+
+    def _measure_regime(self) -> Regime:
+        """Read the driver once per cycle, before judging anything that follows it."""
+        if not self.use_gate:
+            return Regime(regime_mod.NEUTRAL, detail="gate disabled")
+        try:
+            bars = self.venue.candles(self.driver, self.interval,
+                                      limit=max(self.regime_period + 5, 60))
+        except VenueError as exc:
+            # Unknown regime must not read as a permissive one. NEUTRAL allows
+            # both directions, so failing to read BTC would quietly disable the
+            # gate exactly when the market is doing something worth gating on.
+            log.error("could not read %s for the regime gate: %s", self.driver, exc)
+            return Regime(regime_mod.DOWN,
+                          detail=f"could not read {self.driver} - assuming the "
+                                 f"defensive state until it can be read")
+        return regime_mod.btc_regime(bars, self.regime_period)
 
     def _read_stops(self) -> dict[str, float]:
         """Resting stops from the venue, falling back to what we last placed."""
@@ -283,6 +343,11 @@ class Runner:
         entry = bar.close                      # the market order fills near here
         stop = order.sl
 
+        allowed, why = regime_mod.gate(self.regime, symbol, direction,
+                                       driver=self.driver)
+        if self.use_gate and not allowed:
+            return self._refuse(symbol, bar, Verdict(False, why))
+
         verdict = guards.check_all(
             guards.check_capacity(positions, symbol, self.limits),
             guards.check_stop(stop, entry, direction, self.limits),
@@ -307,9 +372,13 @@ class Runner:
         # what will actually be sent rather than what we asked for.
         actual_risk = float(qty) * distance
         leverage = min(self.limits.max_leverage, instrument.max_leverage)
+        notional = float(qty) * entry
         verdict = guards.check_all(
             guards.check_risk(actual_risk, balance, self.limits),
-            guards.check_balance(balance, float(qty) * entry, leverage, self.limits),
+            guards.check_balance(balance, notional, leverage, self.limits),
+            portfolio.check_exposure(portfolio.measure(positions), symbol,
+                                     direction, notional, balance.equity,
+                                     self.exposure_limits),
         )
         if not verdict:
             return self._refuse(symbol, bar, verdict)

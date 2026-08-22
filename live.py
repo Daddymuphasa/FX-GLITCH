@@ -40,6 +40,8 @@ import sys
 import time
 
 from fxglitch.live.guards import Limits
+from fxglitch.live.portfolio import ExposureLimits
+from fxglitch.live.screener import ScreenRules
 from fxglitch.live.runner import INTERVAL_SECONDS, Runner
 from fxglitch.live.state import State
 from fxglitch.venues.base import VenueError
@@ -78,6 +80,29 @@ def main() -> None:
     risk.add_argument("--max-daily-loss", type=float, default=6.0, metavar="PCT")
     risk.add_argument("--min-free", type=float, default=20.0, metavar="PCT",
                       help="percent of equity to keep uncommitted")
+
+    scan = p.add_argument_group("universe screening - one request, not 625")
+    scan.add_argument("--screen", action="store_true",
+                      help="screen the whole universe each cycle instead of a fixed list")
+    scan.add_argument("--top-n", type=int, default=10, metavar="N",
+                      help="symbols to examine after screening (default 10)")
+    scan.add_argument("--min-turnover", type=float, default=10_000_000.0,
+                      metavar="USDT", help="24h turnover floor - a liquidity filter, "
+                                           "not an edge claim")
+    scan.add_argument("--rank-by", default="turnover",
+                      choices=["turnover", "change", "abs_change"],
+                      help="turnover is a cost decision; the others are unmeasured "
+                           "claims about edge")
+
+    gate = p.add_argument_group("BTC gate and correlated exposure")
+    gate.add_argument("--no-gate", action="store_true",
+                      help="stop blocking alt entries against the BTC trend")
+    gate.add_argument("--driver", default="BTCUSDT")
+    gate.add_argument("--regime-period", type=int, default=50)
+    gate.add_argument("--max-same-direction", type=int, default=3,
+                      help="positions allowed to point the same way")
+    gate.add_argument("--max-directional", type=float, default=60.0, metavar="PCT",
+                      help="BTC-equivalent notional on one side, as %% of equity")
 
     p.add_argument("--paper-equity", type=float, default=1000.0, metavar="USDT",
                    help="assumed balance for dry-run when no API key is set")
@@ -127,13 +152,28 @@ def main() -> None:
     runner = Runner(venue, StrategyClass, symbols, interval=args.interval,
                     params=params, limits=limits, state=state,
                     history=args.history, live=args.live,
-                    paper_equity=args.paper_equity)
+                    paper_equity=args.paper_equity,
+                    screen_rules=(ScreenRules(
+                        min_turnover=args.min_turnover, top=args.top_n,
+                        rank_by=args.rank_by, always_include=(args.driver,))
+                        if args.screen else None),
+                    exposure_limits=ExposureLimits(
+                        max_directional_pct=args.max_directional,
+                        max_same_direction=args.max_same_direction),
+                    driver=args.driver, regime_period=args.regime_period,
+                    use_gate=not args.no_gate)
 
     mode = "LIVE - orders will be sent" if args.live else "dry-run - nothing will be sent"
     print(f"\n{StrategyClass.name}")
     print(f"venue {venue.name}, {len(symbols)} symbol(s), {args.interval} bars")
     print(f"risk {args.risk}% per trade, max {args.max_positions} positions, "
           f"halt at -{args.max_daily_loss}% daily")
+    print(f"BTC gate {'off' if args.no_gate else 'on'}, "
+          f"max {args.max_same_direction} positions the same way, "
+          f"max {args.max_directional:.0f}% directional exposure")
+    if args.screen:
+        print(f"screening the universe each cycle: top {args.top_n} by "
+              f"{args.rank_by}, turnover above {args.min_turnover:,.0f}")
     print(f"MODE: {mode}\n")
 
     if args.live and not getattr(venue, "authenticated", False):

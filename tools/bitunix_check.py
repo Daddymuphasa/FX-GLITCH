@@ -10,10 +10,14 @@ the client is internally consistent and proves nothing about whether Bitunix
 agrees. Docs go stale, fields get renamed, and a venue's real responses are the
 only authority. This is the script that closes that gap.
 
-Run it before wiring anything to real money. It touches five things - the
-symbol universe, contract precision, candles, your balance and your open
-positions - and if all five come back sane, the client is talking to the
-exchange correctly.
+Run it before wiring anything to real money. It touches the symbol universe,
+contract precision, candles, the one-call universe screen, what the BTC gate
+would be saying right now, and - with --private - your balance and open
+positions. If they all come back sane, the client agrees with the exchange.
+
+The screen check earns its place: the tickers doc page sits behind the same bot
+protection that blocks the client, so those field names were inferred. This is
+where they get confirmed against real data.
 
 It cannot place, modify or cancel an order. There is no flag for that.
 
@@ -38,6 +42,8 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from fxglitch.live.regime import btc_regime  # noqa: E402
+from fxglitch.live.screener import ScreenRules, screen, summarise  # noqa: E402
 from fxglitch.venues.base import VenueError  # noqa: E402
 from fxglitch.venues.bitunix import Bitunix  # noqa: E402
 
@@ -74,6 +80,46 @@ def check_public(client: Bitunix, symbol: str, interval: str, bars: int) -> bool
     ordered = all(a.time < b.time for a, b in zip(candles, candles[1:]))
     print(f"   ordered oldest-first: {'yes' if ordered else 'NO - BUG'}")
     return ordered
+
+
+def check_screen(client: Bitunix) -> bool:
+    """The one call that makes a 625-symbol universe affordable.
+
+    Field names here were inferred rather than read - the doc page sits behind
+    the same bot check that blocks the client - so this is the check that
+    confirms them. If it reports unusable rows, screener.py needs the real
+    spellings adding to its key lists.
+    """
+    print("\n4. UNIVERSE SCREEN  (one request, not 625)")
+    tickers = client.tickers()
+    usable = [t for t in tickers if t.usable]
+    print(f"   {len(tickers):,} symbols in a single call, {len(usable):,} with a usable price")
+    if len(usable) < len(tickers):
+        print(f"   WARNING: {len(tickers) - len(usable):,} rows had no price we could read.")
+        print("   Bitunix likely renamed a field - add the real name to the key")
+        print("   lists in fxglitch/live/screener.py.")
+
+    rules = ScreenRules(top=10)
+    chosen = screen(tickers, client.instruments(), rules)
+    print(f"   {summarise(tickers, chosen, rules)}")
+    print("   shortlist:")
+    for t in chosen:
+        change = f"{t.change_pct:+.1f}%" if t.change_pct is not None else "   ?  "
+        print(f"     {t.symbol:<16} {t.last:>12,.4f}  {change:>7}  "
+              f"turnover {t.turnover:>18,.0f}")
+    return len(usable) > 0
+
+
+def check_regime(client: Bitunix, interval: str) -> bool:
+    """What the BTC gate would be saying right now."""
+    print("\n5. BTC REGIME GATE")
+    bars = client.candles("BTCUSDT", interval, limit=60)
+    r = btc_regime(bars)
+    print(f"   {r.detail or 'not enough history'}")
+    print(f"   state {r.state} -> alt longs "
+          f"{'allowed' if r.allows(1) else 'BLOCKED'}, alt shorts "
+          f"{'allowed' if r.allows(-1) else 'BLOCKED'}")
+    return True
 
 
 def check_private(client: Bitunix) -> bool:
@@ -116,6 +162,8 @@ def main() -> None:
 
     try:
         ok = check_public(client, args.symbol, args.interval, args.bars)
+        ok = check_screen(client) and ok
+        ok = check_regime(client, args.interval) and ok
         if args.private:
             ok = check_private(client) and ok
     except VenueError as exc:

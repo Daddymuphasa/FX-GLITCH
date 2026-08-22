@@ -42,13 +42,31 @@ BTC = Instrument("BTCUSDT", "BTC", "USDT", qty_precision=4, price_precision=1,
                  max_leverage=125)
 
 
-def candles(n=300, end=NOW, start_price=60000.0, step=100.0):
-    """A clean uptrend - enough to trigger a breakout strategy."""
-    return [Candle(time=end - DAY * (n - 1 - i),
-                   open=start_price + step * i, high=start_price + step * i + 50,
-                   low=start_price + step * i - 50, close=start_price + step * i,
-                   volume=100.0)
-            for i in range(n)]
+def candles(n=300, end=NOW, start_price=60000.0, rate=0.003, bar_range=0.025):
+    """A clean trend with a REALISTIC range-to-price ratio.
+
+    The ratio is the part that matters, and getting it wrong was quietly
+    breaking these tests. An earlier fixture moved 100 points a bar on a
+    60,000 price - a 0.1% daily range, roughly a twentieth of what crypto
+    actually does. ATR came out tiny, so an ATR-based stop sat a hair from the
+    entry, so risk-based sizing bought an enormous position to put 1% at risk,
+    and the exposure limits refused it. The limits were right; the fixture was
+    fantasy.
+
+    Each close prints a new extreme so breakout rules trigger, while the bar's
+    range stays near 2.5% of price, which is ordinary for daily BTC.
+    """
+    out, price = [], start_price
+    for i in range(n):
+        rising = rate >= 0
+        out.append(Candle(
+            time=end - DAY * (n - 1 - i),
+            open=price / (1 + rate),
+            high=price if rising else price * (1 + bar_range),
+            low=price * (1 - bar_range) if rising else price,
+            close=price, volume=100.0))
+        price *= (1 + rate)
+    return out
 
 
 class FakeVenue(Venue):
@@ -64,9 +82,10 @@ class FakeVenue(Venue):
         self.stop_moves = []
 
     def instruments(self):
-        return {"BTCUSDT": BTC, "ETHUSDT":
-                Instrument("ETHUSDT", "ETH", "USDT", 3, 2, Decimal("0.003"),
-                           max_leverage=100)}
+        alts = {s: Instrument(s, s[:-4], "USDT", 3, 2, Decimal("0.001"),
+                              max_leverage=100)
+                for s in ("ETHUSDT", "SOLUSDT", "A0USDT", "A1USDT", "A2USDT")}
+        return {"BTCUSDT": BTC, **alts}
 
     def candles(self, symbol, interval="1d", limit=200):
         return self.bars[-limit:]
@@ -94,24 +113,33 @@ class FakeVenue(Venue):
 
 
 class AlwaysBuy(Strategy):
-    """Opens a long with a stop 1000 below, then trails it 1000 behind."""
+    """Long with a stop `gap` below, trailed. The gap is a PERCENT of price.
+
+    Percent rather than points, for the same reason the candle fixture is
+    proportional: a fixed-point stop means something completely different at
+    60,000 than at 600, and a test whose meaning depends on the price level is
+    a test that will mislead somebody later.
+    """
     name = "always buy"
 
-    def __init__(self, gap: float = 1000.0):
+    def __init__(self, gap: float = 0.05):
         self.params = {"gap": gap}
         self.gap = gap
 
     def prepare(self):
         self.prepared = True
 
+    def stop_for(self, price):
+        return price * (1 - self.gap)
+
     def on_bar(self, i):
         price = self.candles[i].close
         if self.position is not None:
-            trailed = price - self.gap
+            trailed = self.stop_for(price)
             if self.position.sl is None or trailed > self.position.sl:
                 self.position.sl = trailed
             return
-        self.buy(sl=price - self.gap, reason="test entry")
+        self.buy(sl=self.stop_for(price), reason="test entry")
 
 
 class AlwaysClose(Strategy):
@@ -332,10 +360,13 @@ class TestEntries(unittest.TestCase):
         self.assertTrue(order.client_id)
 
     def test_size_comes_from_risk_divided_by_stop_distance(self):
-        # 10,000 equity at 1% = 100 risked; stop 1000 away -> 0.1 BTC.
+        # 10,000 equity at 1% = 100 risked. A 5% stop on the last close means
+        # size = 100 / (price * 0.05), rounded down to the venue's step.
         v = FakeVenue()
         runner(v, live=True).cycle(now=NOW + timedelta(hours=1))
-        self.assertEqual(v.placed[0].qty, Decimal("0.1000"))
+        price = v.bars[-1].close
+        expected = BTC.round_qty(100.0 / (price * 0.05))
+        self.assertEqual(v.placed[0].qty, expected)
 
     def test_a_bar_is_never_acted_on_twice(self):
         v = FakeVenue()
@@ -385,15 +416,15 @@ class TestExitsAndTrailing(unittest.TestCase):
     def test_a_trailed_stop_is_pushed_to_the_exchange(self):
         held = Position("BTCUSDT", LONG, 0.1, 60000, venue_id="p1")
         last = candles()[-1].close
-        v = FakeVenue(positions=[held], stops={"p1": last - 2000})
+        v = FakeVenue(positions=[held], stops={"p1": last * 0.90})
         [d] = runner(v, AlwaysBuy, live=True).cycle(now=NOW + timedelta(hours=1))
         self.assertEqual(d.action, "trail")
-        self.assertEqual(v.stop_moves, [("BTCUSDT", last - 1000)])
+        self.assertEqual(v.stop_moves, [("BTCUSDT", last * 0.95)])
 
     def test_an_unchanged_stop_is_not_resent_every_cycle(self):
         held = Position("BTCUSDT", LONG, 0.1, 60000, venue_id="p1")
         last = candles()[-1].close
-        v = FakeVenue(positions=[held], stops={"p1": last - 1000})
+        v = FakeVenue(positions=[held], stops={"p1": last * 0.95})
         [d] = runner(v, AlwaysBuy, live=True).cycle(now=NOW + timedelta(hours=1))
         self.assertEqual(d.action, "none")
         self.assertEqual(v.stop_moves, [])
@@ -406,10 +437,11 @@ class TestExitsAndTrailing(unittest.TestCase):
             def __init__(self): self.params = {}
             def on_bar(self, i):
                 if self.position is not None:
-                    self.position.sl = 40000.0
+                    self.position.sl = self.candles[i].close * 0.5
 
         held = Position("BTCUSDT", LONG, 0.1, 60000, venue_id="p1")
-        v = FakeVenue(positions=[held], stops={"p1": 59000.0})
+        v = FakeVenue(positions=[held],
+                      stops={"p1": candles()[-1].close * 0.95})
         [d] = runner(v, LoosensStop, live=True).cycle(now=NOW + timedelta(hours=1))
         self.assertEqual(d.action, "blocked")
         self.assertIn("against the position", d.detail)
@@ -466,3 +498,98 @@ class TestSessionGuards(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestScreenAndGateInTheRunner(unittest.TestCase):
+    """The three pieces wired together: screen wide, gate on BTC, cap the bet."""
+
+    def test_screening_replaces_the_symbol_list(self):
+        from fxglitch.live.screener import ScreenRules, Ticker
+
+        class Screenable(FakeVenue):
+            def tickers(self, symbols=None):
+                return [Ticker("BTCUSDT", 78000, 1.0, quote_volume=5e9),
+                        Ticker("ETHUSDT", 2400, 1.0, quote_volume=1e9),
+                        Ticker("DUSTUSDT", 0.01, 1.0, quote_volume=5_000)]
+
+        v = Screenable()
+        r = Runner(v, Quiet, ["IGNORED"], interval="1d", state=State(),
+                   screen_rules=ScreenRules(top=5), use_gate=False)
+        got = r.cycle(now=NOW + timedelta(hours=1))
+        symbols = [d.symbol for d in got]
+        self.assertIn("BTCUSDT", symbols)
+        self.assertNotIn("DUSTUSDT", symbols)
+        self.assertNotIn("IGNORED", symbols)
+
+    def test_a_failed_screen_falls_back_rather_than_trading_everything(self):
+        from fxglitch.live.screener import ScreenRules
+
+        class Broken(FakeVenue):
+            def tickers(self, symbols=None):
+                raise VenueError("fake", "cloudflare", "blocked")
+
+        v = Broken()
+        r = Runner(v, Quiet, ["BTCUSDT"], interval="1d", state=State(),
+                   screen_rules=ScreenRules(), use_gate=False)
+        self.assertEqual([d.symbol for d in r.cycle(now=NOW + timedelta(hours=1))],
+                         ["BTCUSDT"])
+
+    def test_the_gate_blocks_an_alt_long_while_btc_falls(self):
+        class PerSymbol(FakeVenue):
+            def candles(self, symbol, interval="1d", limit=200):
+                # BTC falling, the alt rising - exactly the trap the gate is for.
+                bars = (candles(n=300, start_price=90000.0, rate=-0.003)
+                        if symbol == "BTCUSDT" else candles())
+                return bars[-limit:]
+
+        v = PerSymbol()
+        r = Runner(v, AlwaysBuy, ["SOLUSDT"], interval="1d", state=State(),
+                   live=True, use_gate=True)
+        [d] = r.cycle(now=NOW + timedelta(hours=1))
+        self.assertEqual(d.action, "blocked")
+        self.assertIn("BTC regime is DOWN", d.detail)
+        self.assertEqual(v.placed, [])
+
+    def test_the_same_alt_long_is_allowed_when_btc_rises(self):
+        v = FakeVenue()          # everything rising, BTC included
+        r = Runner(v, AlwaysBuy, ["SOLUSDT"], interval="1d", state=State(),
+                   live=True, use_gate=True)
+        [d] = r.cycle(now=NOW + timedelta(hours=1))
+        self.assertEqual(d.action, "enter", d.detail)
+
+    def test_btc_itself_is_not_gated_by_its_own_downtrend(self):
+        v = FakeVenue(bars=candles(n=300, start_price=90000.0, rate=-0.003))
+        r = Runner(v, AlwaysBuy, ["BTCUSDT"], interval="1d", state=State(),
+                   live=True, use_gate=True)
+        [d] = r.cycle(now=NOW + timedelta(hours=1))
+        self.assertEqual(d.action, "enter", d.detail)
+
+    def test_an_unreadable_driver_fails_closed_not_open(self):
+        # NEUTRAL allows both directions, so a failure to read BTC must not
+        # quietly disable the gate exactly when it matters.
+        class NoBtc(FakeVenue):
+            def candles(self, symbol, interval="1d", limit=200):
+                if symbol == "BTCUSDT":
+                    raise VenueError("fake", "network", "down")
+                return self.bars[-limit:]
+
+        v = NoBtc()
+        r = Runner(v, AlwaysBuy, ["SOLUSDT"], interval="1d", state=State(),
+                   live=True, use_gate=True)
+        [d] = r.cycle(now=NOW + timedelta(hours=1))
+        self.assertEqual(d.action, "blocked")
+        self.assertEqual(v.placed, [])
+
+    def test_correlated_exposure_stops_the_fourth_alt_long(self):
+        from fxglitch.live.portfolio import ExposureLimits
+        held = [Position(f"A{i}USDT", LONG, 1.0, 100.0, venue_id=f"p{i}")
+                for i in range(3)]
+        v = FakeVenue(positions=held)
+        r = Runner(v, AlwaysBuy, ["SOLUSDT"], interval="1d", state=State(),
+                   live=True, use_gate=False,
+                   limits=Limits(max_positions=99),
+                   exposure_limits=ExposureLimits(max_same_direction=3))
+        [d] = r.cycle(now=NOW + timedelta(hours=1))
+        self.assertEqual(d.action, "blocked")
+        self.assertIn("one BTC bet", d.detail)
+        self.assertEqual(v.placed, [])
