@@ -107,6 +107,28 @@ def bollinger(
     return upper, mid, lower
 
 
+def keltner(
+    candles: Series, period: int = 20, mult: float = 1.5, atr_period: int = 14
+) -> tuple[list[Num], list[Num], list[Num]]:
+    """Keltner Channels: EMA ± mult × ATR. Returns (upper, mid, lower).
+
+    Distinct from Bollinger in that the width is driven by ATR (range) rather
+    than standard deviation (close-to-close). When Bollinger Bands contract
+    inside Keltner Channels, volatility is compressing — the squeeze state.
+    """
+    from .data import closes as _closes  # avoid circular at module level
+
+    mid = ema(_closes(candles), period)
+    a = atr(candles, atr_period)
+    upper: list[Num] = [None] * len(candles)
+    lower: list[Num] = [None] * len(candles)
+    for i in range(len(candles)):
+        if mid[i] is not None and a[i] is not None:
+            upper[i] = mid[i] + mult * a[i]
+            lower[i] = mid[i] - mult * a[i]
+    return upper, mid, lower
+
+
 def highest(values: list[float], period: int) -> list[Num]:
     out: list[Num] = [None] * len(values)
     for i in range(period - 1, len(values)):
