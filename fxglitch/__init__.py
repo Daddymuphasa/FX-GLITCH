@@ -1,3 +1,3 @@
-"""FX-GLITCH: a learning lab for synthetic indices and XAUUSD strategies."""
+"""FX-GLITCH: policy MCP for Binance USDⓈ-M agents."""
 
-__version__ = "0.1.0"
+__version__ = "1.0.0"

@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "fx-glitch": {
+      "command": "python",
+      "args": ["-m", "fxglitch.agent.mcp_server"],
+      "cwd": "."
+    },
+    "binance-mcp-server": {
+      "url": "https://agent.binance.com/mcp/agentic"
+    }
+  }
+}

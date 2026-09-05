@@ -1,5 +1,8 @@
 """Run a strategy against a live venue. Dry-run unless you say otherwise.
 
+The Agent OS / hackathon product is agent.py (positioning + policy, no TA).
+This file is the older strategy runner and is not the submission path.
+
     # Watch what it would do. Sends nothing. No API key needed.
     python live.py donchian_breakout --symbols BTCUSDT,ETHUSDT
 
@@ -9,16 +12,19 @@
     # Once every hour, forever
     python live.py donchian_breakout --top 20 --every 1h
 
-    # For real. Requires BITUNIX_API_KEY and BITUNIX_SECRET_KEY.
-    python live.py donchian_breakout --symbols BTCUSDT --live
+    # For Binance demo/live. Requires BINANCE_API_KEY and BINANCE_SECRET_KEY.
+    python live.py donchian_breakout --venue binance --symbols BTCUSDT --live
+
+    # Point the Binance client at a compatible demo endpoint when available.
+    $env:BINANCE_FUTURES_BASE_URL = "https://demo-fapi.binance.com"
 
 THE ORDER TO DO THIS IN
 -----------------------
 1. Dry-run for a few weeks on the timeframe you intend to trade. Read the
    decisions. The question is not "does it work" - it is "are these the trades
    I would have taken", and it is answerable for free.
-2. `python tools/bitunix_check.py --private` with a READ-ONLY key, to prove the
-   signing works before a key that can trade exists.
+2. Use a read-only or demo Binance key to prove authentication and market data
+   before a key that can trade exists.
 3. `--live` with one symbol and an amount you would shrug at.
 4. More symbols, only after the portfolio layer exists. Twenty alt perps are
    not twenty bets; they are one leveraged BTC bet wearing a disguise, and
@@ -46,10 +52,11 @@ from fxglitch.live.runner import INTERVAL_SECONDS, Runner
 from fxglitch.live.state import State
 from fxglitch.store import DEFAULT_ROOT, CandleStore
 from fxglitch.venues.base import VenueError
+from fxglitch.venues.binance import Binance
 from fxglitch.venues.bitunix import Bitunix
 from run import coerce, load_strategy
 
-VENUES = {"bitunix": Bitunix}
+VENUES = {"binance": Binance, "bitunix": Bitunix}
 
 
 def parse_every(raw: str) -> int:
@@ -63,7 +70,7 @@ def parse_every(raw: str) -> int:
 def main() -> None:
     p = argparse.ArgumentParser(description="Run a strategy on a live venue")
     p.add_argument("strategy")
-    p.add_argument("--venue", default="bitunix", choices=sorted(VENUES))
+    p.add_argument("--venue", default="binance", choices=sorted(VENUES))
     p.add_argument("--symbols", help="comma separated, e.g. BTCUSDT,ETHUSDT")
     p.add_argument("--top", type=int, metavar="N",
                    help="first N tradeable USDT perps, BTC first")
@@ -183,8 +190,9 @@ def main() -> None:
     print(f"MODE: {mode}\n")
 
     if args.live and not getattr(venue, "authenticated", False):
-        sys.exit("--live needs BITUNIX_API_KEY and BITUNIX_SECRET_KEY in the "
-                 "environment.")
+        key_name = "BINANCE_API_KEY and BINANCE_SECRET_KEY" if args.venue == "binance" \
+            else "BITUNIX_API_KEY and BITUNIX_SECRET_KEY"
+        sys.exit(f"--live needs {key_name} in the environment.")
 
     interval = parse_every(args.every) if args.every else None
     try:
