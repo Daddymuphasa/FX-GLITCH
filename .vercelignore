@@ -1,0 +1,9 @@
+data/
+reports/
+tests/
+docs/strategies/
+__pycache__/
+*.pyc
+.venv/
+venv/
+.git/

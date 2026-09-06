@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from http.server import BaseHTTPRequestHandler
 from urllib.parse import parse_qs, urlparse
 
@@ -60,13 +61,15 @@ def dispatch(method: str, path: str, query: dict, body: dict):
         except RuntimeError as exc:
             return _json({"error": str(exc), "hint": "Use /api/demo if Binance is unreachable"}, 503)
     if path == "/api/cycle" and method == "POST":
+        # Public host never sends orders. Local --live still works via CLI.
+        live = bool(body.get("live")) and not os.environ.get("VERCEL")
         symbol = body.get("symbol") or "BTCUSDT"
         try:
             result = run_cycle(
                 symbol,
                 message=body.get("message"),
-                live=bool(body.get("live")),
-                venue=Binance() if body.get("live") else None,
+                live=live,
+                venue=Binance() if live else None,
             )
             return _json(result.to_dict())
         except RuntimeError as exc:

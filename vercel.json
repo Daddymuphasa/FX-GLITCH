@@ -1,0 +1,9 @@
+{
+  "framework": null,
+  "functions": {
+    "api/*.py": {
+      "maxDuration": 30,
+      "excludeFiles": "{data,docs,strategies,tests,reports,web}/**"
+    }
+  }
+}

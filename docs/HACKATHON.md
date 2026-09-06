@@ -38,7 +38,7 @@ leverage, missing stops, daily-loss breaches, and correlated alt baskets
 that are one BTC bet. Chart TA is not in the live path.
 
 GitHub: https://github.com/Daddymuphasa/FX-GLITCH
-Demo: python serve.py  → http://127.0.0.1:8765
+Demo: https://fx-glitch.vercel.app
 MCP:  python -m fxglitch.agent.mcp_server
 Pair with: https://agent.binance.com/mcp/agentic
 
@@ -54,7 +54,7 @@ Pair with: https://agent.binance.com/mcp/agentic
 | Track B: connect MCPs and trade | Stdio MCP in `fxglitch/agent/mcp_server.py` + documented pair with official Binance MCP |
 | Trading on Binance | `fxglitch/venues/binance.py` USDⓈ-M perps, HMAC, filters, protective stops. Dry-run unless `--live` |
 | Agent OS | MCP tools an agent can call: positioning, policy, cycle, signal parse, judge demo |
-| Demo | `python serve.py` dashboard + `python agent.py --demo` offline 60s flow |
+| Demo | https://fx-glitch.vercel.app + `python agent.py --demo` offline 60s flow |
 | GitHub | this repository |
 
 What we **cannot** do for you: follow, repost, survey, or confirm your jurisdiction.

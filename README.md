@@ -10,9 +10,11 @@ An agent may *propose*. FX-GLITCH decides whether the trade is allowed.
 - **Execution** is dry-run unless you pass `--live` and set API keys.
 - **Chart TA is not in this path.** Donchian / EMA / squeeze files remain in `strategies/` as a research archive. The live product does not call them.
 
+Live demo (Vercel): **https://fx-glitch.vercel.app**
+
 ```
 python agent.py --demo
-python serve.py          # http://127.0.0.1:8765
+python serve.py          # local: http://127.0.0.1:8765
 python -m fxglitch.agent.mcp_server
 ```
 
