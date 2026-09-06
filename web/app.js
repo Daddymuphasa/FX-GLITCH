@@ -7,6 +7,7 @@ const equityEl = document.getElementById("equity");
 
 let currentRaw = "";
 let selectedId = "";
+let liveAllowed = false;
 
 function money(n) {
   const v = Number(n) || 0;
@@ -84,9 +85,10 @@ function renderPlans(rec) {
       <div class="nums">${p.policy_ok ? "policy pass" : p.policy_reason}</div>
     `;
     const btn = document.createElement("button");
-    btn.textContent = p.policy_ok ? "Take this plan (dry-run)" : "Blocked";
+    const send = document.getElementById("send-live") && document.getElementById("send-live").checked;
+    btn.textContent = !p.policy_ok ? "Blocked" : (send && liveAllowed ? "Send this plan on Binance" : "Take this plan (dry-run)");
     btn.disabled = !p.policy_ok;
-    btn.onclick = () => execute(rec.raw, p.id);
+    btn.onclick = () => execute(rec.raw, p.id, p);
     card.appendChild(btn);
     plansEl.appendChild(card);
   });
@@ -108,16 +110,29 @@ async function loadRecommend(message) {
   }
 }
 
-async function execute(message, plan) {
-  msgEl.textContent = "Building order…";
+async function execute(message, plan, details) {
+  const sendBox = document.getElementById("send-live");
+  const wantLive = !!(sendBox && sendBox.checked);
+  if (wantLive) {
+    const ok = window.confirm(
+      "Send a MARKET order to Binance USDⓈ-M?\n\n" +
+      (details ? `${details.label}: ${details.leverage}x ${details.qty} qty\nSL ${details.stop}  TP ${details.take_profit}\n` : "") +
+      "This spends real margin if keys are set."
+    );
+    if (!ok) {
+      msgEl.textContent = "Cancelled. Nothing sent.";
+      return;
+    }
+  }
+  msgEl.textContent = wantLive ? "Sending to Binance…" : "Building dry-run…";
   try {
     const data = await post("/api/execute", {
-      message, plan, equity: Number(equityEl.value) || 1000, confirm: true, live: false,
+      message, plan, equity: Number(equityEl.value) || 1000, confirm: true, live: wantLive,
     });
     const p = data.plan;
     msgEl.textContent = data.dry_run
-      ? `Dry-run ${p.label}: ${p.leverage}x ${data.recommendation.direction} ${data.recommendation.binance_symbol}. SL ${p.stop} TP ${p.take_profit}. Nothing sent.`
-      : `Sent ${p.label}. Order ${data.order && data.order.id}`;
+      ? `Dry-run ${p.label}: ${p.leverage}x ${data.recommendation && data.recommendation.direction} ${data.recommendation && data.recommendation.binance_symbol}. SL ${p.stop} TP ${p.take_profit}. Nothing sent.${data.hint ? " " + data.hint : ""}`
+      : `Sent ${p.label} on Binance. Order ${data.order && data.order.id}`;
   } catch (err) {
     msgEl.textContent = err.message;
   }
@@ -171,6 +186,18 @@ async function refreshInbox() {
 }
 
 async function boot() {
+  try {
+    const health = await get("/api/health");
+    liveAllowed = !!health.live_allowed;
+    const hint = document.getElementById("live-hint");
+    if (!health.binance) {
+      hint.textContent = "Orders are dry-run until you put BINANCE_API_KEY and BINANCE_SECRET_KEY in .env and restart python serve.py. Then tick 'Send to Binance'.";
+    } else if (!liveAllowed) {
+      hint.textContent = "Binance keys are present but live send is disabled on the hosted site. Use http://127.0.0.1:8765 to send.";
+    } else {
+      hint.textContent = "Keys loaded. Tick 'Send to Binance' and confirm to place a market order with SL/TP.";
+    }
+  } catch (_err) {}
   const box = await refreshInbox();
   if (box.signals && box.signals[0]) {
     selectedId = box.signals[0].id;

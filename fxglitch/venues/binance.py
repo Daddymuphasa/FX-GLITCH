@@ -305,6 +305,12 @@ class Binance(Venue):
         data = self._protective_order(request, instrument, "STOP_MARKET", Decimal(str(stop_price)))
         return OrderResult(accepted=True, venue_order_id=str(data.get("orderId", "")), raw=data)
 
+    def set_leverage(self, symbol: str, leverage: int) -> dict:
+        """POST /fapi/v1/leverage — required before a futures market order."""
+        return self._request("POST", "/fapi/v1/leverage", query={
+            "symbol": symbol, "leverage": int(leverage),
+        }, private=True)
+
     def place(self, order: OrderRequest) -> OrderResult:
         instrument = self.instruments().get(order.symbol)
         if instrument is None:

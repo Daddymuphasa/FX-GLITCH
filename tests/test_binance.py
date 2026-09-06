@@ -88,6 +88,14 @@ class TestBinanceMarketData(unittest.TestCase):
 
 
 class TestBinanceTrading(unittest.TestCase):
+    def test_set_leverage_is_signed(self):
+        c, transport = client({"/fapi/v1/leverage": {"leverage": 8, "symbol": "BTCUSDT"}})
+        c.set_leverage("BTCUSDT", 8)
+        call = transport.calls[-1]
+        self.assertIn("/fapi/v1/leverage", call["url"])
+        self.assertEqual(call["query"]["leverage"], ["8"])
+        self.assertEqual(call["headers"]["X-MBX-APIKEY"], "key")
+
     def test_market_order_and_protective_stop(self):
         c, transport = client()
         result = c.place(OrderRequest("BTCUSDT", LONG, Decimal("0.001"),

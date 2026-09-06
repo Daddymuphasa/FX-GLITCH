@@ -11,7 +11,7 @@ from urllib.parse import parse_qs, urlparse
 
 from ..live.guards import Limits
 from ..venues.binance import Binance
-from ..venues.base import OrderRequest
+from ..venues.base import OrderRequest, VenueError
 from .inbox import ingest, list_signals
 from .mcp_server import TOOLS
 from .plans import plan_by_id, proposal_from_plan, recommend
@@ -91,7 +91,15 @@ def _recommend_body(body: dict):
 
 def dispatch(method: str, path: str, query: dict, body: dict):
     if path == "/api/health":
-        return _json({"ok": True, "product": "FX-GLITCH Agent OS", "dry_run": True})
+        venue = Binance()
+        live_ok = bool(venue.authenticated) and not os.environ.get("VERCEL")
+        return _json({
+            "ok": True,
+            "product": "FX-GLITCH Agent OS",
+            "dry_run": not live_ok,
+            "binance": bool(venue.authenticated),
+            "live_allowed": live_ok,
+        })
     if path == "/api/hackathon":
         return _json(HACKATHON)
     if path == "/api/tools":
@@ -153,24 +161,41 @@ def dispatch(method: str, path: str, query: dict, body: dict):
         if not plan["policy_ok"]:
             return _json({"error": plan["policy_reason"], "recommendation": rec.to_dict()}, 400)
         proposal = proposal_from_plan(rec, plan)
-        live = bool(body.get("live")) and bool(body.get("confirm")) and not os.environ.get("VERCEL")
-        venue = Binance() if live else None
-        if live and venue is not None and getattr(venue, "authenticated", False):
-            qty = Decimal(str(plan["qty"]))
-            result = venue.place(OrderRequest(
-                symbol=proposal.symbol,
-                direction=1 if proposal.direction == "LONG" else -1,
-                qty=qty,
-                stop_price=Decimal(str(plan["stop"])),
-                take_profit=Decimal(str(plan["take_profit"])),
-                client_id=f"fxg-{proposal.symbol}-{int(datetime.now(timezone.utc).timestamp())}",
-                reason=proposal.reason,
-            ))
+        want_live = bool(body.get("live")) and bool(body.get("confirm")) and not os.environ.get("VERCEL")
+        venue = Binance()
+        if want_live and not venue.authenticated:
+            return _json({
+                "error": "No Binance keys. Add BINANCE_API_KEY and BINANCE_SECRET_KEY to .env, restart python serve.py, then confirm again.",
+                "dry_run": True,
+                "plan": plan,
+            }, 400)
+        if want_live:
+            listed = venue.instruments().get(proposal.symbol)
+            if listed is None or not listed.tradeable:
+                return _json({
+                    "error": f"{proposal.symbol} is not a tradeable Binance USDⓈ-M perpetual, so nothing was sent.",
+                    "dry_run": True,
+                    "plan": plan,
+                }, 400)
+            try:
+                venue.set_leverage(proposal.symbol, int(plan["leverage"]))
+                result = venue.place(OrderRequest(
+                    symbol=proposal.symbol,
+                    direction=1 if proposal.direction == "LONG" else -1,
+                    qty=Decimal(str(plan["qty"])),
+                    stop_price=Decimal(str(plan["stop"])),
+                    take_profit=Decimal(str(plan["take_profit"])),
+                    client_id=f"fxg-{proposal.symbol}-{int(datetime.now(timezone.utc).timestamp())}",
+                    reason=proposal.reason,
+                ))
+            except VenueError as exc:
+                return _json({"error": str(exc), "dry_run": True, "plan": plan}, 400)
             return _json({"sent": bool(result.accepted), "dry_run": False,
                           "order": {"id": result.venue_order_id, "message": result.message},
                           "plan": plan, "recommendation": rec.to_dict()})
         return _json({"sent": False, "dry_run": True, "plan": plan,
-                      "proposal": proposal.to_dict(), "recommendation": rec.to_dict()})
+                      "proposal": proposal.to_dict(), "recommendation": rec.to_dict(),
+                      "hint": "Check 'Send to Binance' and confirm. Needs API keys in .env."})
     if path == "/api/telegram" and method == "GET":
         action = (query.get("action") or ["status"])[0]
         if action == "qr":

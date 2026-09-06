@@ -65,7 +65,8 @@
 
     <section>
       <h2>Risk plans</h2>
-      <p class="hint">Same stop as the signal. Size, leverage and take-profit change with the plan. Win/loss is this setup’s TP vs SL — not a historical win rate.</p>
+      <p class="hint" id="live-hint">Same stop as the signal. Size, leverage and take-profit change with the plan. Win/loss is this setup’s TP vs SL — not a historical win rate.</p>
+      <label id="live-label"><input id="send-live" type="checkbox" /> Send to Binance (market + SL + TP). Off = dry-run only.</label>
       <div id="plans" class="plans"></div>
       <p id="execute-msg" class="hint"></p>
     </section>

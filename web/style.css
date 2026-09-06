@@ -87,6 +87,7 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 .card .rr { font-family: "IBM Plex Mono", monospace; font-size: 22px; }
 .card .nums { font-family: "IBM Plex Mono", monospace; font-size: 12px; color: var(--muted); }
 .card button { margin-top: auto; }
+#live-label { display: block; margin: 0 0 12px; font-size: 13px; color: var(--ink); }
 .win { color: var(--allow); }
 .loss { color: var(--block); }
 code { font-family: "IBM Plex Mono", monospace; color: var(--accent); }
