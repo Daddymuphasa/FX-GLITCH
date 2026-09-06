@@ -59,7 +59,9 @@ def _context(symbol: str | None):
     try:
         venue = Binance()
         instruments = venue.instruments()
-        if symbol and symbol in instruments:
+        if not instruments:
+            instruments = None
+        if symbol and instruments and symbol in instruments:
             rows = venue._request("GET", "/fapi/v1/premiumIndex", query={"symbol": symbol})
             mark = float(rows.get("markPrice") or 0) or None
         if venue.authenticated:

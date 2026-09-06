@@ -43,10 +43,10 @@ def map_to_binance(raw: str | None, instruments: dict[str, Instrument] | None = 
     symbol = normalize_usdt(raw)
     if symbol is None:
         return PairMap("bitunix", "", "", False, False, None, "no USDT symbol in the signal")
-    info = (instruments or {}).get(symbol)
-    if instruments is None:
+    if not instruments:
         return PairMap("bitunix", symbol, symbol, False, False, None,
                        "Binance listing not checked yet")
+    info = instruments.get(symbol)
     if info is None:
         return PairMap("bitunix", symbol, symbol, False, False, None,
                        f"{symbol} is not a Binance USDⓈ-M perpetual — will not send")
