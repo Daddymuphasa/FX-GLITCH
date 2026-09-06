@@ -109,11 +109,13 @@ function renderInbox(signals) {
   rows.forEach((s) => {
     const div = document.createElement("div");
     div.className = "item" + (s.id === selectedId ? " active" : "");
+    const side = (s.direction || "").toUpperCase();
     const tag = s.still_good === true
       ? '<span class="tag">OPEN</span>'
       : (s.still_good === false ? '<span class="tag late">late</span>' : "");
-    div.innerHTML = `<div class="pair">${s.direction || "?"} ${s.binance_symbol || s.bitunix_symbol || "—" } ${tag}</div>
-      <div class="meta">${s.still_good_reason || "Tap to size this trade"}</div>`;
+    const dir = side === "SHORT" ? '<span class="dir short">SHORT</span>' : '<span class="dir long">LONG</span>';
+    div.innerHTML = `<div class="pair">${dir} ${s.binance_symbol || s.bitunix_symbol || "—" } ${tag}</div>
+      <div class="meta">${s.still_good_reason || "Tap to open this trade"}</div>`;
     div.onclick = () => {
       openTicket(s, signals);
       const trade = document.getElementById("trade");
@@ -125,16 +127,15 @@ function renderInbox(signals) {
 }
 
 function renderAnalysis(rec) {
-  const pair = rec.pair || {};
+  const side = (rec.direction || "").toUpperCase();
+  const dir = side === "SHORT" ? '<span class="dir short">SHORT</span>' : '<span class="dir long">LONG</span>';
+  const tp = (rec.take_profits && rec.take_profits[0]) || rec.take_profit || "—";
   analysisEl.innerHTML = `
-    <div class="pair-hero">
-      <div class="side">${rec.direction || "—"}</div>
-      <h3>${rec.binance_symbol || "NO PAIR"}</h3>
-    </div>
-    <div class="kv">
-      <div><span>Entry</span><span>${rec.entry ?? "—"} ${rec.entry_is_market ? "market" : ""}</span></div>
-      <div><span>Stop</span><span>${rec.stop ?? "—"}</span></div>
-      <div><span>Take profit</span><span>${(rec.take_profits || []).join(" / ") || "—"}</span></div>
+    <div class="pair-hero">${dir}<h3>${rec.binance_symbol || "NO PAIR"}</h3></div>
+    <div class="stats">
+      <div class="stat"><small>Entry</small><b>${rec.entry ?? "—"}</b></div>
+      <div class="stat"><small>Stop</small><b>${rec.stop ?? "—"}</b></div>
+      <div class="stat"><small>Target</small><b>${tp}</b></div>
     </div>
     <p class="${rec.warnings && rec.warnings.length ? "warn" : "hint"}">${(rec.warnings || []).join(" · ") || ""}</p>
   `;
@@ -155,10 +156,11 @@ function renderPlans(rec) {
     btn.type = "button";
     btn.className = "pick " + p.id + (p.id === selectedPlan ? " on" : "");
     btn.disabled = !p.policy_ok;
+    const tone = { daredevil: "Max", high: "Bold", mid: "Normal", low: "Easy" }[p.id] || p.label;
     btn.innerHTML = `
-      <h3>${p.label}</h3>
-      <div class="wl"><span class="win">${money(p.win_if_tp)}</span><span class="loss">−${money(p.loss_if_sl)}</span></div>
-      <div class="nums">${p.leverage}x · 1:${Number(p.reward_risk).toFixed(1)}</div>
+      <h3>${tone}</h3>
+      <p class="soft">${p.leverage}x · risk ${p.risk_pct}%</p>
+      <div class="wl"><span class="win">win ${money(p.win_if_tp)}</span><span class="loss">lose ${money(p.loss_if_sl)}</span></div>
     `;
     btn.onclick = () => {
       selectedPlan = p.id;
@@ -168,7 +170,8 @@ function renderPlans(rec) {
   });
   const chosen = plans.find((p) => p.id === selectedPlan);
   takeBtn.disabled = !chosen || !chosen.policy_ok;
-  takeBtn.textContent = chosen ? "Take " + chosen.label : "Take trade";
+  const tone = chosen && ({ daredevil: "Max", high: "Bold", mid: "Normal", low: "Easy" }[chosen.id] || chosen.label);
+  takeBtn.textContent = chosen ? "Take " + tone : "Take trade";
 }
 
 function recFromSignal(s) {
