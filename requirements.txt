@@ -4,3 +4,7 @@ numpy>=1.26
 # Optional: only needed for the data downloaders in tools/
 websockets>=12.0   # tools/fetch_derivs.py (derivatives history)
 requests>=2.31     # tools/fetch_crypto.py (crypto candles)
+
+# Optional: QR login for a Telegram user already in the Bitunix group
+telethon>=1.36
+qrcode>=7.4

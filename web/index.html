@@ -23,6 +23,27 @@
       </div>
     </header>
 
+    <section class="link-panel">
+      <article>
+        <h2>Link Telegram (QR)</h2>
+        <p class="hint">Scan with the Telegram app on the phone that is already in the Bitunix futures group. Same flow as linking Telegram Desktop. This machine must be running <code>python serve.py</code> — Vercel cannot keep the session.</p>
+        <div class="qr-row">
+          <div class="qr-box" id="qr-box">QR appears here</div>
+          <div>
+            <p id="qr-status" class="hint">Not linked.</p>
+            <label class="hidden" id="pw-wrap">2FA password <input id="tg-password" type="password" /></label>
+            <div class="row-actions">
+              <button id="btn-qr" class="primary">Show QR</button>
+              <button id="btn-password" class="hidden">Submit 2FA</button>
+              <button id="btn-chats">Load my groups</button>
+            </div>
+            <select id="chat-list"></select>
+            <button id="btn-watch">Watch this group</button>
+          </div>
+        </div>
+      </article>
+    </section>
+
     <section class="desk">
       <article class="inbox">
         <h2>Group signals</h2>
@@ -51,10 +72,10 @@
     <section class="connect">
       <h2>Connect the Bitunix Telegram group</h2>
       <ol class="steps">
-        <li>Create a bot with <code>@BotFather</code>. Copy the token into <code>TELEGRAM_BOT_TOKEN</code>.</li>
-        <li>Turn privacy off: <code>/setprivacy</code> → Disable. Add the bot to the Bitunix futures group.</li>
-        <li>Run <code>python tools/telegram_listen.py --discover</code>, copy the group <code>chat_id</code> into <code>TELEGRAM_CHAT_ID</code>.</li>
-        <li>Leave <code>python tools/telegram_listen.py</code> running. New signals land in this inbox.</li>
+        <li>On this PC: get <code>TELEGRAM_API_ID</code> + <code>TELEGRAM_API_HASH</code> from <code>https://my.telegram.org</code> (API development tools). Put them in <code>.env</code>.</li>
+        <li>Run <code>python serve.py</code> and open this desk. Click <strong>Show QR</strong>.</li>
+        <li>On your phone, open Telegram → Settings → Devices → Link Desktop Device, and scan the QR. Use the account that is already in the Bitunix group.</li>
+        <li>Click <strong>Load my groups</strong>, pick the Bitunix futures group, then <strong>Watch this group</strong>. New posts land in the inbox and get Binance risk plans.</li>
       </ol>
     </section>
   </div>

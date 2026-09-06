@@ -19,6 +19,8 @@ python tools/telegram_listen.py --discover
 python tools/telegram_listen.py
 ```
 
+To watch a group you already joined: set `TELEGRAM_API_ID` / `TELEGRAM_API_HASH` from https://my.telegram.org, run `python serve.py`, click **Show QR**, scan with Telegram (Settings → Devices → Link Desktop Device), pick the Bitunix group.
+
 ```
 python agent.py --demo
 python serve.py          # local: http://127.0.0.1:8765

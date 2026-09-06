@@ -18,6 +18,7 @@ from .plans import plan_by_id, proposal_from_plan, recommend
 from .positioning import fetch_briefing
 from .session import from_signal, judge_demo, paper_balance, run_cycle
 from .telegram_in import ingest_update
+from .telegram_user import bridge
 
 HACKATHON = {
     "event": "Binance Agent OS Mini Hackathon",
@@ -122,8 +123,10 @@ def dispatch(method: str, path: str, query: dict, body: dict):
         proposal = from_signal(message)
         return _json(proposal.to_dict())
     if path == "/api/inbox" and method == "GET":
+        snap = bridge.snapshot()
         return _json({"signals": list_signals(),
-                      "telegram": bool(os.environ.get("TELEGRAM_BOT_TOKEN"))})
+                      "telegram": bool(os.environ.get("TELEGRAM_BOT_TOKEN")) or snap.get("status") in ("linked", "watching"),
+                      "account": snap})
     if path == "/api/inbox" and method == "POST":
         try:
             item = ingest(body.get("message") or "", source=body.get("source") or "paste")
@@ -168,8 +171,22 @@ def dispatch(method: str, path: str, query: dict, body: dict):
                           "plan": plan, "recommendation": rec.to_dict()})
         return _json({"sent": False, "dry_run": True, "plan": plan,
                       "proposal": proposal.to_dict(), "recommendation": rec.to_dict()})
+    if path == "/api/telegram" and method == "GET":
+        action = (query.get("action") or ["status"])[0]
+        if action == "qr":
+            return _json(bridge.ensure_qr())
+        if action == "chats":
+            return _json(bridge.chats())
+        return _json(bridge.snapshot())
     if path == "/api/telegram" and method == "POST":
-        item = ingest_update(body if "message" in body or "channel_post" in body
+        action = body.get("action")
+        if action == "watch":
+            return _json(bridge.set_watch(str(body.get("chat_id") or ""), body.get("title") or ""))
+        if action == "password":
+            return _json(bridge.set_password(str(body.get("password") or "")))
+        if action == "qr":
+            return _json(bridge.ensure_qr())
+        item = ingest_update(body if "update_id" in body or "channel_post" in body
                              else {"message": {"text": body.get("text") or body.get("message"),
                                                "message_id": body.get("update_id", 0),
                                                "chat": {"id": "manual"}}})
