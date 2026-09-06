@@ -77,7 +77,13 @@ def _recommend_body(body: dict):
     if not message:
         return _json({"error": "message is required"}, 400)
     equity = float(body.get("equity") or 1000)
+    hint_mark = body.get("mark")
+    try:
+        hint_mark = float(hint_mark) if hint_mark not in (None, "") else None
+    except (TypeError, ValueError):
+        hint_mark = None
     instruments, mark, balance = _context(None)
+    mark = hint_mark or mark
     parsed_symbol = None
     rec_once = recommend(message, equity=equity, mark=mark, instruments=instruments,
                          balance=balance)

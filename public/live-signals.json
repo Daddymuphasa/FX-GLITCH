@@ -1,5 +1,5 @@
 {
-  "updated": "2026-09-06T09:02:17Z",
+  "updated": "2026-09-06T17:01:40Z",
   "signals": [
     {
       "id": "-1002004401199:21566",
@@ -16,9 +16,88 @@
       "listed": false,
       "tradeable": false,
       "still_good": true,
-      "still_good_reason": "mark still between SL and TP; live R:R 1:113.56",
-      "mark": 0.01987,
-      "live_rr": 113.55604075691413
+      "still_good_reason": "mark still between SL and TP; live R:R 1:109.69",
+      "mark": 0.02011,
+      "live_rr": 109.68917018284108,
+      "plans": [
+        {
+          "id": "daredevil",
+          "label": "Daredevil",
+          "blurb": "Very high risk / reward. A full stop hurts.",
+          "leverage": 15,
+          "risk_pct": 8.0,
+          "entry": 0.02011,
+          "stop": 0.013,
+          "take_profit": 0.8,
+          "qty": 11251.758087201126,
+          "notional": 226.27285513361463,
+          "margin": 15.084857008907642,
+          "loss_if_sl": 80.0,
+          "win_if_tp": 8775.133614627286,
+          "reward_risk": 109.68917018284108,
+          "policy_ok": true,
+          "policy_reason": "all guards passed \u2014 dry-run until --live / FXGLITCH_LIVE=1"
+        },
+        {
+          "id": "high",
+          "label": "High risk",
+          "blurb": "Near the group\u2019s leverage. Size is still aggressive.",
+          "leverage": 8,
+          "risk_pct": 3.0,
+          "entry": 0.02011,
+          "stop": 0.013,
+          "take_profit": 0.8,
+          "qty": 4219.4092827004215,
+          "notional": 84.85232067510547,
+          "margin": 10.606540084388184,
+          "loss_if_sl": 30.0,
+          "win_if_tp": 3290.6751054852325,
+          "reward_risk": 109.68917018284108,
+          "policy_ok": true,
+          "policy_reason": "all guards passed \u2014 dry-run until --live / FXGLITCH_LIVE=1"
+        },
+        {
+          "id": "mid",
+          "label": "Mid risk",
+          "blurb": "1% of equity at risk. Default if you would shrug at the loss.",
+          "leverage": 3,
+          "risk_pct": 1.0,
+          "entry": 0.02011,
+          "stop": 0.013,
+          "take_profit": 0.8,
+          "qty": 1406.4697609001407,
+          "notional": 28.28410689170183,
+          "margin": 9.428035630567276,
+          "loss_if_sl": 10.0,
+          "win_if_tp": 1096.8917018284108,
+          "reward_risk": 109.68917018284108,
+          "policy_ok": true,
+          "policy_reason": "all guards passed \u2014 dry-run until --live / FXGLITCH_LIVE=1"
+        },
+        {
+          "id": "low",
+          "label": "Low risk",
+          "blurb": "Smallest size. Same stop, less damage if it is wrong.",
+          "leverage": 2,
+          "risk_pct": 0.5,
+          "entry": 0.02011,
+          "stop": 0.013,
+          "take_profit": 0.8,
+          "qty": 703.2348804500704,
+          "notional": 14.142053445850914,
+          "margin": 7.071026722925457,
+          "loss_if_sl": 5.0,
+          "win_if_tp": 548.4458509142054,
+          "reward_risk": 109.68917018284108,
+          "policy_ok": true,
+          "policy_reason": "all guards passed \u2014 dry-run until --live / FXGLITCH_LIVE=1"
+        }
+      ],
+      "entry": 0.02011,
+      "stop": 0.013,
+      "take_profits": [
+        0.8
+      ]
     }
   ]
 }

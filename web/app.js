@@ -12,6 +12,7 @@ let currentRaw = "";
 let selectedId = "";
 let selectedPlan = "mid";
 let currentRec = null;
+let selectedSignal = null;
 const isAdmin = document.documentElement.classList.contains("is-admin");
 const KEYS = "fxg.binance";
 const BOOK = "fxg.book";
@@ -114,10 +115,7 @@ function renderInbox(signals) {
     div.innerHTML = `<div class="pair">${s.direction || "?"} ${s.binance_symbol || s.bitunix_symbol || "—" } ${tag}</div>
       <div class="meta">${s.still_good_reason || "Tap to size this trade"}</div>`;
     div.onclick = () => {
-      selectedId = s.id;
-      if (rawEl) rawEl.value = s.raw;
-      loadRecommend(s.raw);
-      renderInbox(signals);
+      openTicket(s, signals);
       const trade = document.getElementById("trade");
       if (trade) trade.scrollIntoView({ behavior: "smooth", block: "start" });
     };
@@ -173,17 +171,63 @@ function renderPlans(rec) {
   takeBtn.textContent = chosen ? "Take " + chosen.label : "Take trade";
 }
 
-async function loadRecommend(message) {
+function recFromSignal(s) {
+  return {
+    raw: s.raw,
+    direction: s.direction,
+    binance_symbol: s.binance_symbol || s.bitunix_symbol,
+    bitunix_symbol: s.bitunix_symbol,
+    pair: s.pair || {},
+    entry: s.entry || s.mark,
+    entry_is_market: true,
+    stop: s.stop,
+    take_profits: s.take_profits || [],
+    warnings: s.warnings || [],
+    notes: [],
+    plans: s.plans || [],
+  };
+}
+
+function openTicket(s, allSignals) {
+  selectedSignal = s;
+  selectedId = s.id;
+  currentRaw = s.raw || "";
+  if (rawEl) rawEl.value = currentRaw;
+  const baked = recFromSignal(s);
+  if (baked.direction) renderAnalysis(baked);
+  if (baked.plans && baked.plans.length) renderPlans(baked);
+  else {
+    analysisEl.innerHTML = baked.direction
+      ? analysisEl.innerHTML
+      : '<p class="hint">Sizing…</p>';
+  }
+  if (allSignals) renderInbox(allSignals);
+  loadRecommend(currentRaw, s.mark);
+}
+
+async function loadRecommend(message, mark) {
   currentRaw = message;
-  analysisEl.innerHTML = '<p class="hint">Sizing on Binance…</p>';
+  if (!plansEl.innerHTML) {
+    analysisEl.innerHTML = '<p class="hint">Sizing the four risk plans…</p>';
+  }
   try {
-    const rec = await post("/api/recommend", { message, equity: Number(equityEl.value) || 1000 });
-    renderAnalysis(rec);
-    renderPlans(rec);
+    const rec = await post("/api/recommend", {
+      message,
+      equity: Number(equityEl.value) || 1000,
+      mark: mark || (selectedSignal && selectedSignal.mark) || undefined,
+    });
+    if (rec && (rec.plans || []).length) {
+      renderAnalysis(rec);
+      renderPlans(rec);
+    } else if (!(currentRec && currentRec.plans && currentRec.plans.length)) {
+      analysisEl.innerHTML = `<p class="warn">${(rec.warnings || []).join(" · ") || "Could not size this setup."}</p>`;
+      takeBtn.disabled = true;
+    }
   } catch (err) {
-    analysisEl.innerHTML = `<p class="warn">${err.message}</p>`;
-    plansEl.innerHTML = "";
-    takeBtn.disabled = true;
+    if (!(currentRec && currentRec.plans && currentRec.plans.length)) {
+      analysisEl.innerHTML = `<p class="warn">${err.message}</p>`;
+      takeBtn.disabled = true;
+    }
   }
 }
 
@@ -265,29 +309,42 @@ function renderAccount(snap) {
   }
 }
 
-async function refreshInbox() {
-  let signals = [];
-  let box = { signals: [], account: null };
-  try {
-    box = await get("/api/inbox");
-    signals = box.signals || [];
-  } catch (_err) {}
-  const onlyDemo = signals.length === 1 && signals[0].id === "demo-kaito";
-  if (!signals.length || onlyDemo) {
-    try {
-      const live = await (await fetch("/live-signals.json")).json();
-      if (live.signals && live.signals.length) signals = live.signals;
-    } catch (_err) {}
-    try {
-      const remote = await get("/api/signals");
-      if (remote.signals && remote.signals.length && remote.signals[0].id !== "demo-kaito") {
-        signals = remote.signals;
-      }
-    } catch (_err) {}
+function mergeSignals(parts) {
+  const map = new Map();
+  parts.forEach((list) => {
+    (list || []).forEach((s) => {
+      if (s && (s.id || s.raw)) map.set(s.id || s.raw, s);
+    });
+  });
+  let rows = [...map.values()];
+  if (rows.some((s) => s.id !== "demo-kaito")) {
+    rows = rows.filter((s) => s.id !== "demo-kaito");
   }
-  box.signals = signals;
+  return rows;
+}
+
+async function refreshInbox() {
+  let fromInbox = [];
+  let fromFile = [];
+  let fromHost = [];
+  let account = null;
+  try {
+    const box = await get("/api/inbox");
+    fromInbox = box.signals || [];
+    account = box.account;
+  } catch (_err) {}
+  try {
+    const live = await (await fetch("/live-signals.json?t=" + Date.now())).json();
+    fromFile = live.signals || [];
+  } catch (_err) {}
+  try {
+    const remote = await get("/api/signals");
+    fromHost = remote.signals || [];
+  } catch (_err) {}
+  const signals = mergeSignals([fromFile, fromHost, fromInbox]);
+  const box = { signals, account };
   renderInbox(signals);
-  if (box.account) renderAccount(box.account);
+  if (account) renderAccount(account);
   return box;
 }
 
@@ -346,12 +403,7 @@ async function boot() {
   }
   const rows = uniqueSignals(box.signals || []);
   const pick = rows.find((s) => s.still_good === true) || rows[0];
-  if (pick) {
-    selectedId = pick.id;
-    if (rawEl) rawEl.value = pick.raw;
-    renderInbox(box.signals);
-    loadRecommend(pick.raw);
-  }
+  if (pick) openTicket(pick, box.signals);
   setInterval(refreshInbox, 8000);
 }
 
@@ -433,11 +485,7 @@ async function scanToday() {
       ? `${data.kept} still good to enter.`
       : (data.error || "scan failed");
   }
-  if (kept[0]) {
-    selectedId = kept[0].id;
-    if (rawEl) rawEl.value = kept[0].raw;
-    loadRecommend(kept[0].raw);
-  }
+  if (kept[0]) openTicket(kept[0]);
   return data;
 }
 

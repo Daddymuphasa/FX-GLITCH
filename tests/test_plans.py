@@ -62,6 +62,15 @@ class TestPlans(unittest.TestCase):
         rec = recommend("BTCUSDT long CMP leverage 10x")
         self.assertFalse(rec.plans)
 
+    def test_cmp_without_mark_still_builds_plans(self):
+        rec = recommend(
+            "PIPPIN/USDT\nLong position\nEntry CMP\nTp 0.8\nSl 0.01300\nLeverage 7x",
+            equity=1000,
+        )
+        self.assertEqual(rec.direction, "LONG")
+        self.assertTrue(rec.plans)
+        self.assertTrue(any(p["policy_ok"] for p in rec.plans))
+
 
 class TestTelegramExtract(unittest.TestCase):
     def test_group_message(self):

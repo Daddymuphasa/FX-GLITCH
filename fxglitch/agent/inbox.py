@@ -75,11 +75,27 @@ def _load_live() -> list[dict]:
     return []
 
 
+def _with_plans(row: dict) -> dict:
+    out = dict(row)
+    rec = recommend(out.get("raw") or "", equity=1000.0, mark=out.get("mark"))
+    payload = rec.to_dict()
+    out["plans"] = payload.get("plans") or []
+    out["entry"] = payload.get("entry")
+    out["stop"] = payload.get("stop")
+    out["take_profits"] = payload.get("take_profits") or []
+    out["direction"] = payload.get("direction") or out.get("direction")
+    out["binance_symbol"] = payload.get("binance_symbol") or out.get("binance_symbol")
+    if out.get("mark") is None:
+        out["mark"] = payload.get("entry")
+    return out
+
+
 def publish_live() -> list[dict]:
     rows = _load()
     good = [row for row in rows if row.get("still_good") is True][:20]
     if not good:
         good = [row for row in rows if row.get("direction") and row.get("binance_symbol")][:20]
+    good = [_with_plans(row) for row in good]
     try:
         LIVE_PATH.parent.mkdir(parents=True, exist_ok=True)
         LIVE_PATH.write_text(

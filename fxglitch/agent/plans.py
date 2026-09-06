@@ -169,6 +169,9 @@ def recommend(
     tps = [float(x) for x in signal.take_profits] if signal.take_profits else []
     if signal.take_profit is not None and float(signal.take_profit) not in tps:
         tps.insert(0, float(signal.take_profit))
+    if entry is None and stop and tps:
+        entry = (float(stop) + float(tps[0])) / 2.0
+        notes.append("No live mark; entry estimated between stop and first TP so the desk can still size.")
 
     can = bool(pair.binance and direction and entry and stop and entry > 0 and stop > 0
                and abs(entry - stop) > 0)
