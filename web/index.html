@@ -4,83 +4,104 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>FX-GLITCH — Signal desk</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
-  <div class="frame">
-    <header>
-      <div>
-        <p class="eyebrow">Bitunix Telegram → Binance USDⓈ-M</p>
-        <h1>FX-GLITCH desk</h1>
-        <p class="lede">The group posts a Bitunix futures signal. The agent maps the pair on Binance, then you pick a risk plan. Nothing is sent until you confirm.</p>
+  <aside class="operator" aria-hidden="true">
+    <img src="/assets/operator.jpg" alt="" />
+    <div class="operator-fade"></div>
+  </aside>
+
+  <main class="app">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-visor" aria-hidden="true"></div>
+        <div>
+          <p class="eyebrow">Bitunix Telegram → Binance USDT-M</p>
+          <h1>FX-GLITCH</h1>
+        </div>
       </div>
+      <p class="lede">The group posts a futures signal. We map the Binance pair. You pick a risk plan. Nothing is sent until you confirm.</p>
       <div class="pills">
-        <span class="pill">dry-run default</span>
+        <span class="pill" id="mode-pill">dry-run default</span>
         <span class="pill" id="tg-status">telegram: not connected</span>
+        <span class="pill" id="bn-status">binance: no keys</span>
       </div>
     </header>
 
-    <section class="link-panel">
-      <article>
-        <h2>Link Telegram (QR)</h2>
-        <p class="hint">Scan with the Telegram app on the phone that is already in the Bitunix futures group. Same flow as linking Telegram Desktop. This machine must be running <code>python serve.py</code> — Vercel cannot keep the session.</p>
-        <div class="qr-row">
-          <div class="qr-box" id="qr-box">QR appears here</div>
-          <div>
-            <p id="qr-status" class="hint">Not linked.</p>
-            <label class="hidden" id="pw-wrap">2FA password <input id="tg-password" type="password" /></label>
-            <div class="row-actions">
-              <button id="btn-qr" class="primary">Show QR</button>
-              <button id="btn-password" class="hidden">Submit 2FA</button>
-              <button id="btn-chats">Load my groups</button>
-            </div>
-            <select id="chat-list"></select>
-            <button id="btn-watch">Watch this group</button>
-          </div>
-        </div>
-      </article>
-    </section>
+    <ol class="flow" id="flow">
+      <li class="step current" data-step="1"><span>01</span> Signals</li>
+      <li class="step" data-step="2"><span>02</span> Map pair</li>
+      <li class="step" data-step="3"><span>03</span> Pick risk</li>
+    </ol>
 
     <section class="desk">
       <article class="inbox">
-        <h2>Group signals</h2>
-        <p class="hint" id="inbox-hint">New posts stream in. Scan today to backfill setups whose entry is still valid.</p>
-        <button id="btn-scan">Scan today's signals</button>
+        <div class="panel-head">
+          <h2>Group signals</h2>
+          <button id="btn-scan" type="button">Scan today</button>
+        </div>
+        <p class="hint" id="inbox-hint">New posts land here. Scan today to keep only setups whose entry is still valid.</p>
         <div id="inbox"></div>
-        <textarea id="raw" rows="7" placeholder="Paste a Bitunix group signal&#10;KAITO/USDT&#10;Long position&#10;Entry CMP&#10;Tp 1.5&#10;Sl 0.2500&#10;Leverage 10x"></textarea>
+        <textarea id="raw" rows="6" placeholder="Paste a Bitunix group signal&#10;KAITO/USDT&#10;Long position&#10;Entry CMP&#10;Tp 1.5&#10;Sl 0.2500&#10;Leverage 10x"></textarea>
         <div class="row-actions">
           <label>Equity USDT <input id="equity" type="number" value="1000" min="10" step="10" /></label>
-          <button id="btn-ingest" class="primary">Analyse on Binance</button>
+          <button id="btn-ingest" class="primary" type="button">Analyse on Binance</button>
         </div>
       </article>
 
       <article class="analysis">
         <h2>Analysis</h2>
-        <div id="analysis" class="hint">Select a signal or paste one.</div>
+        <div id="analysis" class="hint">Select a signal or paste one. The pair, stop, and four plans appear here.</div>
       </article>
     </section>
 
-    <section>
-      <h2>Risk plans</h2>
-      <p class="hint" id="live-hint">Same stop as the signal. Size, leverage and take-profit change with the plan. Win/loss is this setup’s TP vs SL — not a historical win rate.</p>
-      <label id="live-label"><input id="send-live" type="checkbox" /> Send to Binance (market + SL + TP). Off = dry-run only.</label>
+    <section class="plans-wrap">
+      <div class="panel-head">
+        <div>
+          <h2>Risk plans</h2>
+          <p class="hint" id="live-hint">Same stop as the signal. Size, leverage and take-profit change with the plan. Win/loss is this setup’s TP vs SL — not a historical win rate.</p>
+        </div>
+        <label id="live-label" class="toggle">
+          <input id="send-live" type="checkbox" />
+          <span>Send to Binance</span>
+        </label>
+      </div>
       <div id="plans" class="plans"></div>
-      <p id="execute-msg" class="hint"></p>
+      <p id="execute-msg" class="hint banner"></p>
     </section>
 
-    <section class="connect">
-      <h2>Connect the Bitunix Telegram group</h2>
-      <ol class="steps">
-        <li>On this PC: get <code>TELEGRAM_API_ID</code> + <code>TELEGRAM_API_HASH</code> from <code>https://my.telegram.org</code> (API development tools). Put them in <code>.env</code>.</li>
-        <li>Run <code>python serve.py</code> and open this desk. Click <strong>Show QR</strong>.</li>
-        <li>On your phone, open Telegram → Settings → Devices → Link Desktop Device, and scan the QR. Use the account that is already in the Bitunix group.</li>
-        <li>Click <strong>Load my groups</strong>, pick the Bitunix futures group, then <strong>Watch this group</strong>. New posts land in the inbox and get Binance risk plans.</li>
-      </ol>
-    </section>
-  </div>
+    <details class="setup" id="setup-tg">
+      <summary>
+        <span>Link Telegram</span>
+        <em>QR on this PC only — Vercel cannot keep the session</em>
+      </summary>
+      <div class="qr-row">
+        <div class="qr-box" id="qr-box">QR appears here</div>
+        <div>
+          <p id="qr-status" class="hint">Not linked.</p>
+          <label class="hidden" id="pw-wrap">2FA password <input id="tg-password" type="password" /></label>
+          <div class="row-actions">
+            <button id="btn-qr" class="primary" type="button">Show QR</button>
+            <button id="btn-password" class="hidden" type="button">Submit 2FA</button>
+            <button id="btn-chats" type="button">Load my groups</button>
+          </div>
+          <select id="chat-list"></select>
+          <button id="btn-watch" type="button">Watch this group</button>
+          <ol class="steps">
+            <li>Get <code>TELEGRAM_API_ID</code> + <code>TELEGRAM_API_HASH</code> from <code>https://my.telegram.org</code> (API development tools). Put them in <code>.env</code>.</li>
+            <li>Run <code>python serve.py</code>, open this desk, click <strong>Show QR</strong>.</li>
+            <li>Phone: Telegram → Settings → Devices → Link Desktop Device. Scan with the account already in the Bitunix group.</li>
+            <li><strong>Load my groups</strong>, pick the futures group, then <strong>Watch this group</strong>.</li>
+          </ol>
+        </div>
+      </div>
+    </details>
+  </main>
   <script src="/app.js"></script>
 </body>
 </html>

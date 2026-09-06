@@ -278,6 +278,8 @@ class Handler(BaseHTTPRequestHandler):
             return
         ext = os.path.splitext(full)[1]
         types = {".html": "text/html; charset=utf-8", ".css": "text/css",
-                 ".js": "application/javascript", ".svg": "image/svg+xml"}
+                 ".js": "application/javascript", ".svg": "image/svg+xml",
+                 ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png",
+                 ".webp": "image/webp", ".ico": "image/x-icon"}
         with open(full, "rb") as fh:
             self._send(200, types.get(ext, "application/octet-stream"), fh.read())

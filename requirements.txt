@@ -5,6 +5,7 @@ numpy>=1.26
 websockets>=12.0   # tools/fetch_derivs.py (derivatives history)
 requests>=2.31     # tools/fetch_crypto.py (crypto candles)
 
-# Optional: QR login for a Telegram user already in the Bitunix group
+# Telegram QR login (python serve.py on this PC)
 telethon>=1.36
 qrcode>=7.4
+pillow>=10.0

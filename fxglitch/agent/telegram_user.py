@@ -49,10 +49,23 @@ def _qr_image(url: str) -> str:
     return "data:image/svg+xml;base64," + base64.b64encode(svg).decode()
 
 
+def _valid_chat_id(value) -> bool:
+    text = str(value or "").strip()
+    if not text:
+        return False
+    try:
+        int(text)
+    except (TypeError, ValueError):
+        return False
+    return True
+
+
 def _load_watch() -> dict:
     try:
         if WATCH_PATH.exists():
-            return json.loads(WATCH_PATH.read_text(encoding="utf-8"))
+            data = json.loads(WATCH_PATH.read_text(encoding="utf-8"))
+            if _valid_chat_id(data.get("chat_id")):
+                return data
     except (OSError, json.JSONDecodeError):
         pass
     return {}
@@ -227,7 +240,7 @@ class TelegramBridge:
             if hook:
                 await asyncio.to_thread(_forward, hook, text)
 
-        if watch:
+        if _valid_chat_id(watch):
             self._status = "watching"
             asyncio.create_task(self._scan_today())
 
@@ -242,10 +255,10 @@ class TelegramBridge:
     async def _scan_today(self) -> dict:
         watch = _load_watch()
         chat_id = watch.get("chat_id")
-        if not chat_id or self._client is None:
+        if not _valid_chat_id(chat_id) or self._client is None:
             return {"ok": False, "error": "not watching a group yet", "scanned": 0, "kept": 0}
         since = self._today_start()
-        entity = int(chat_id)
+        entity = int(str(chat_id).strip())
         scanned = 0
         kept = 0
         skipped = 0
@@ -382,8 +395,12 @@ class TelegramBridge:
         return snap
 
     def set_watch(self, chat_id: str, title: str = "") -> dict:
-        _save_watch({"chat_id": str(chat_id), "title": title})
-        if self._status == "linked":
+        if not _valid_chat_id(chat_id):
+            snap = self.snapshot()
+            snap["error"] = "Load my groups and pick the Bitunix chat first."
+            return snap
+        _save_watch({"chat_id": str(chat_id).strip(), "title": title or ""})
+        if self._status in ("linked", "watching"):
             self._status = "watching"
         return self.snapshot()
 

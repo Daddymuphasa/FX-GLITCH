@@ -10,7 +10,7 @@ An agent may *propose*. FX-GLITCH decides whether the trade is allowed.
 - **Execution** is dry-run unless you pass `--live` and set API keys.
 - **Chart TA is not in this path.** Donchian / EMA / squeeze files remain in `strategies/` as a research archive. The live product does not call them.
 
-Live demo (Vercel): **https://fx-glitch.vercel.app**
+Live demo: **https://fxglitch.xyz** (Vercel: https://fx-glitch.vercel.app)
 
 The desk reads a Bitunix Telegram futures signal, maps the USDT-M pair on Binance, and offers four risk plans (Daredevil / High / Mid / Low). Stop stays the group’s invalidation. Size, leverage and TP change with the plan. Win/loss is that setup’s R-multiple, not a made-up win rate.
 
@@ -19,11 +19,11 @@ python tools/telegram_listen.py --discover
 python tools/telegram_listen.py
 ```
 
-To watch a group you already joined: set `TELEGRAM_API_ID` / `TELEGRAM_API_HASH` from https://my.telegram.org, run `python serve.py`, click **Show QR**, scan with Telegram (Settings → Devices → Link Desktop Device), pick the Bitunix group.
+To watch a group you already joined: set `TELEGRAM_API_ID` / `TELEGRAM_API_HASH` from https://my.telegram.org, run `start-desk.bat` (or `python serve.py --open`), click **Show QR**, scan with Telegram (Settings → Devices → Link Desktop Device), pick the Bitunix group. QR login is local-only — Vercel cannot keep the Telegram session.
 
 ```
 python agent.py --demo
-python serve.py          # local: http://127.0.0.1:8765
+python serve.py --open   # local: http://127.0.0.1:8765
 python -m fxglitch.agent.mcp_server
 ```
 
