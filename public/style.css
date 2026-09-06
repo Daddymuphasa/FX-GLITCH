@@ -378,6 +378,8 @@ code { font-family: "IBM Plex Mono", monospace; color: var(--visor); font-size: 
 .steps { padding-left: 18px; margin: 14px 0 0; color: var(--muted); font-size: 13px; }
 .steps li { margin: 8px 0; }
 
+html:not(.is-admin) .admin-only { display: none !important; }
+
 @media (max-width: 1100px) {
   .plans { grid-template-columns: 1fr 1fr; }
 }

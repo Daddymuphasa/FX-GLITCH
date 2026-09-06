@@ -8,6 +8,7 @@ const equityEl = document.getElementById("equity");
 let currentRaw = "";
 let selectedId = "";
 let liveAllowed = false;
+const isAdmin = document.documentElement.classList.contains("is-admin");
 
 function money(n) {
   const v = Number(n) || 0;
@@ -156,6 +157,7 @@ async function execute(message, plan, details) {
 }
 
 function renderAccount(snap) {
+  if (!isAdmin) return;
   const box = document.getElementById("qr-box");
   const status = document.getElementById("qr-status");
   const pwWrap = document.getElementById("pw-wrap");
@@ -247,15 +249,19 @@ async function boot() {
     bn.classList.remove("ok", "warn", "live");
     mode.classList.remove("ok", "warn", "live");
     if (!health.binance) {
-      hint.textContent = "Orders are dry-run until you put BINANCE_API_KEY and BINANCE_SECRET_KEY in .env and restart python serve.py. Then tick 'Send to Binance'.";
+      hint.textContent = isAdmin
+        ? "Orders are dry-run until you put BINANCE_API_KEY and BINANCE_SECRET_KEY in .env and restart python serve.py. Then tick 'Send to Binance'."
+        : "Same stop as the signal. Size, leverage and take-profit change with the plan. Nothing is sent until you confirm.";
       bn.textContent = "binance: no keys";
       bn.classList.add("warn");
       mode.textContent = "dry-run default";
     } else if (!liveAllowed) {
-      hint.textContent = "Binance keys are present but live send is disabled on the hosted site. Use http://127.0.0.1:8765 to send.";
+      hint.textContent = isAdmin
+        ? "Binance keys are present but live send is disabled on the hosted site. Use http://127.0.0.1:8765 to send."
+        : "Plans are dry-run on the public desk. Confirm a plan to see the sized order. Nothing is sent from this site.";
       bn.textContent = "binance: keys (hosted = dry-run)";
       bn.classList.add("ok");
-      mode.textContent = "dry-run on vercel";
+      mode.textContent = "dry-run";
     } else {
       hint.textContent = "Keys loaded. Tick 'Send to Binance' and confirm to place a market order with SL/TP.";
       bn.textContent = "binance: keys ready";
@@ -276,14 +282,14 @@ async function boot() {
     return;
   }
   const account = box.account || {};
-  if (account.status === "linked" || account.status === "watching") {
+  if (isAdmin && (account.status === "linked" || account.status === "watching")) {
     try {
       fillChats(await get("/api/telegram?action=chats"));
     } catch (_err) {}
   }
   if (box.signals && box.signals[0]) {
     selectedId = box.signals[0].id;
-    rawEl.value = box.signals[0].raw;
+    if (rawEl) rawEl.value = box.signals[0].raw;
     renderInbox(box.signals);
     loadRecommend(box.signals[0].raw);
   }
