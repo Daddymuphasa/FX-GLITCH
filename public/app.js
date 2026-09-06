@@ -96,7 +96,7 @@ function uniqueSignals(signals) {
     out.push(s);
   });
   out.sort((a, b) => Number(b.still_good === true) - Number(a.still_good === true));
-  return isAdmin ? out : out.filter((s) => s.still_good !== false);
+  return out;
 }
 
 function renderInbox(signals) {
@@ -478,7 +478,7 @@ document.getElementById("btn-chats").onclick = async () => {
 
 async function scanToday() {
   const hint = document.getElementById("inbox-hint");
-  if (hint) hint.textContent = "Reading today's group messages…";
+  if (hint) hint.textContent = "Reading the last 3 days in the group…";
   const data = await get("/api/telegram?action=scan");
   if (data.account) renderAccount(data.account);
   await refreshInbox();

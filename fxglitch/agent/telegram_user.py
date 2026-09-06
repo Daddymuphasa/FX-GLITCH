@@ -49,6 +49,27 @@ def _qr_image(url: str) -> str:
     return "data:image/svg+xml;base64," + base64.b64encode(svg).decode()
 
 
+def _same_chat(left, right) -> bool:
+    a, b = str(left or "").strip(), str(right or "").strip()
+    if a and a == b:
+        return True
+    da = "".join(c for c in a if c.isdigit())
+    db = "".join(c for c in b if c.isdigit())
+    return bool(da and da == db)
+
+
+def _message_text(msg) -> str:
+    if msg is None:
+        return ""
+    text = getattr(msg, "raw_text", None) or getattr(msg, "message", None) or ""
+    if not isinstance(text, str):
+        text = str(text or "")
+    if text.strip():
+        return text.strip()
+    cap = getattr(msg, "caption", None) or ""
+    return str(cap).strip()
+
+
 def _valid_chat_id(value) -> bool:
     text = str(value or "").strip()
     if not text:
@@ -219,10 +240,13 @@ class TelegramBridge:
         @self._client.on(events.NewMessage())
         async def _on_message(event):
             wanted = _load_watch().get("chat_id")
-            if wanted and str(event.chat_id) != str(wanted):
+            if wanted and not _same_chat(event.chat_id, wanted):
                 return
-            text = event.raw_text or ""
-            if not text.strip():
+            text = _message_text(getattr(event, "message", None) or event)
+            if not text:
+                return
+            parsed = parse_signal(text)
+            if not parsed.symbol or not parsed.direction:
                 return
             title = ""
             try:
@@ -230,29 +254,46 @@ class TelegramBridge:
                 title = getattr(chat, "title", None) or getattr(chat, "username", "") or ""
             except Exception:
                 title = str(event.chat_id)
-            item = ingest(
+            rec = recommend(text, equity=1000.0)
+            mark = rec.mark or fetch_mark(rec.binance_symbol or parsed.symbol)
+            if mark and rec.entry is None:
+                rec = recommend(text, equity=1000.0, mark=mark)
+            check = live_entry_check(
+                direction=rec.direction, entry=rec.entry, stop=rec.stop,
+                take_profits=rec.take_profits, mark=mark,
+            )
+            ingest(
                 text,
                 source="telegram",
                 telegram_id=f"{event.chat_id}:{event.id}",
                 chat=title,
+                extra={
+                    "still_good": check["ok"],
+                    "still_good_reason": check["reason"],
+                    "mark": check["mark"],
+                    "live_rr": check["live_rr"],
+                },
             )
             from .inbox import publish_live
             await asyncio.to_thread(publish_live)
-            hook = os.environ.get("FXGLITCH_INBOX_WEBHOOK", "").strip()
-            if hook:
-                await asyncio.to_thread(_forward, hook, text)
 
         if _valid_chat_id(watch):
             self._status = "watching"
             asyncio.create_task(self._scan_today())
+            asyncio.create_task(self._keep_scanning())
 
     def _today_start(self) -> datetime:
-        try:
-            from zoneinfo import ZoneInfo
-            now = datetime.now(ZoneInfo("Africa/Lagos"))
-        except Exception:
-            now = datetime.now(timezone(timedelta(hours=1)))
-        return now.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc)
+        return datetime.now(timezone.utc) - timedelta(hours=72)
+
+    async def _keep_scanning(self) -> None:
+        while True:
+            await asyncio.sleep(120)
+            try:
+                await self._scan_today()
+                from .inbox import publish_live
+                publish_live()
+            except Exception:
+                pass
 
     async def _scan_today(self) -> dict:
         watch = _load_watch()
@@ -267,7 +308,7 @@ class TelegramBridge:
         seen = 0
         samples: list[str] = []
         try:
-            async for msg in self._client.iter_messages(entity, limit=250):
+            async for msg in self._client.iter_messages(entity, limit=500):
                 msg_time = msg.date
                 if msg_time.tzinfo is None:
                     msg_time = msg_time.replace(tzinfo=timezone.utc)
@@ -276,7 +317,7 @@ class TelegramBridge:
                 if msg_time < since:
                     break
                 seen += 1
-                text = (msg.raw_text or "").strip()
+                text = _message_text(msg)
                 if text and len(samples) < 8:
                     samples.append(text[:280])
                 if not text:

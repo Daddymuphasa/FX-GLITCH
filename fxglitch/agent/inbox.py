@@ -92,9 +92,19 @@ def _with_plans(row: dict) -> dict:
 
 def publish_live() -> list[dict]:
     rows = _load()
-    good = [row for row in rows if row.get("still_good") is True][:20]
-    if not good:
-        good = [row for row in rows if row.get("direction") and row.get("binance_symbol")][:20]
+    good = [row for row in rows if row.get("still_good") is True]
+    recent = [row for row in rows if row.get("direction") and row.get("binance_symbol")]
+    seen_ids: set[str] = set()
+    merged: list[dict] = []
+    for row in good + recent:
+        key = str(row.get("id") or row.get("telegram_id") or row.get("raw"))
+        if key in seen_ids:
+            continue
+        seen_ids.add(key)
+        merged.append(row)
+        if len(merged) >= 20:
+            break
+    good = merged
     good = [_with_plans(row) for row in good]
     try:
         LIVE_PATH.parent.mkdir(parents=True, exist_ok=True)
