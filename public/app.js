@@ -4,24 +4,35 @@ const plansEl = document.getElementById("plans");
 const msgEl = document.getElementById("execute-msg");
 const rawEl = document.getElementById("raw");
 const equityEl = document.getElementById("equity");
+const takeBtn = document.getElementById("btn-take");
+const keysDlg = document.getElementById("keys-dialog");
 
 let currentRaw = "";
 let selectedId = "";
-let liveAllowed = false;
+let selectedPlan = "mid";
+let currentRec = null;
 const isAdmin = document.documentElement.classList.contains("is-admin");
+const KEYS = "fxg.binance";
 
 function money(n) {
   const v = Number(n) || 0;
   return (v < 0 ? "-" : "") + "$" + Math.abs(v).toFixed(2);
 }
 
-function setFlow(n) {
-  document.querySelectorAll(".step").forEach((el) => {
-    const step = Number(el.getAttribute("data-step"));
-    el.classList.toggle("current", step === n);
-    el.classList.toggle("done", step < n);
-  });
+function userKeys() {
+  try {
+    return JSON.parse(localStorage.getItem(KEYS) || "{}");
+  } catch (_err) {
+    return {};
+  }
 }
+
+function hasUserKeys() {
+  const k = userKeys();
+  return !!(k.api_key && k.secret);
+}
+
+function setFlow(_n) {}
 
 async function get(url) {
   const res = await fetch(url);
@@ -58,7 +69,7 @@ function renderInbox(signals) {
   const rows = uniqueSignals(signals);
   inboxEl.innerHTML = "";
   if (!rows.length) {
-    inboxEl.innerHTML = "<p class='hint'>No open setups yet. When the desk is watching Telegram, still-valid trades show up here.</p>";
+    inboxEl.innerHTML = "<p class='hint'>No live setups yet. When the desk is watching Telegram, they land here.</p>";
     return rows;
   }
   rows.forEach((s) => {
@@ -67,17 +78,15 @@ function renderInbox(signals) {
     const tag = s.still_good === true
       ? '<span class="tag">OPEN</span>'
       : (s.still_good === false ? '<span class="tag late">late</span>' : "");
-    div.innerHTML = `<div>${s.direction || "?"} ${s.binance_symbol || s.bitunix_symbol || "unknown"}${tag}</div>
-      <div class="meta">${s.still_good_reason || s.chat || s.source || ""}</div>`;
+    div.innerHTML = `<div class="pair">${s.direction || "?"} ${s.binance_symbol || s.bitunix_symbol || "—" } ${tag}</div>
+      <div class="meta">${s.still_good_reason || "Tap to size this trade"}</div>`;
     div.onclick = () => {
       selectedId = s.id;
       if (rawEl) rawEl.value = s.raw;
       loadRecommend(s.raw);
       renderInbox(signals);
-      const target = document.querySelector(".analysis");
-      if (target && window.matchMedia("(max-width: 900px)").matches) {
-        target.scrollIntoView({ behavior: "smooth", block: "start" });
-      }
+      const trade = document.getElementById("trade");
+      if (trade) trade.scrollIntoView({ behavior: "smooth", block: "start" });
     };
     inboxEl.appendChild(div);
   });
@@ -86,94 +95,96 @@ function renderInbox(signals) {
 
 function renderAnalysis(rec) {
   const pair = rec.pair || {};
-  const listed = pair.tradeable ? "yes, tradeable" : (pair.note || "unchecked");
   analysisEl.innerHTML = `
     <div class="pair-hero">
       <div class="side">${rec.direction || "—"}</div>
       <h3>${rec.binance_symbol || "NO PAIR"}</h3>
-      <p>from ${rec.bitunix_symbol || "unknown"} · listed ${listed}</p>
     </div>
     <div class="kv">
-      <div><span>Entry</span><span>${rec.entry ?? "—"} ${rec.entry_is_market ? "(mark/CMP)" : ""}</span></div>
+      <div><span>Entry</span><span>${rec.entry ?? "—"} ${rec.entry_is_market ? "market" : ""}</span></div>
       <div><span>Stop</span><span>${rec.stop ?? "—"}</span></div>
-      <div><span>TPs</span><span>${(rec.take_profits || []).join(" / ") || "—"}</span></div>
-      <div><span>Group leverage</span><span>${rec.signal_leverage ?? "—"}x</span></div>
-      <div><span>Equity</span><span>${money(rec.equity)}</span></div>
+      <div><span>Take profit</span><span>${(rec.take_profits || []).join(" / ") || "—"}</span></div>
     </div>
-    <p class="${rec.warnings && rec.warnings.length ? "warn" : "hint"}">${(rec.warnings || []).join(" · ") || rec.notes[0]}</p>
+    <p class="${rec.warnings && rec.warnings.length ? "warn" : "hint"}">${(rec.warnings || []).join(" · ") || ""}</p>
   `;
 }
 
 function renderPlans(rec) {
   plansEl.innerHTML = "";
-  msgEl.textContent = "";
-  (rec.plans || []).forEach((p) => {
-    const card = document.createElement("div");
-    card.className = "card " + p.id;
-    card.innerHTML = `
-      <h3>${p.label}</h3>
-      <p class="hint">${p.blurb}</p>
-      <div class="rr"><small>Reward : risk</small>1 : ${Number(p.reward_risk).toFixed(2)}</div>
-      <div class="wl">
-        <div class="win"><small>If TP hits</small>${money(p.win_if_tp)}</div>
-        <div class="loss"><small>If SL hits</small>−${money(p.loss_if_sl)}</div>
-      </div>
-      <div class="nums">${p.leverage}x · risk ${p.risk_pct}% · qty ${Number(p.qty).toPrecision(4)}</div>
-      <div class="nums">SL ${p.stop} · TP ${p.take_profit}</div>
-      <div class="nums">${p.policy_ok ? "policy pass" : p.policy_reason}</div>
-    `;
-    const btn = document.createElement("button");
-    const send = document.getElementById("send-live") && document.getElementById("send-live").checked;
-    btn.textContent = !p.policy_ok ? "Blocked" : (send && liveAllowed ? "Send this plan on Binance" : "Take this plan (dry-run)");
-    btn.disabled = !p.policy_ok;
-    if (p.policy_ok && send && liveAllowed) btn.className = "primary";
-    btn.onclick = () => execute(rec.raw, p.id, p);
-    card.appendChild(btn);
-    plansEl.appendChild(card);
-  });
-  if (!rec.plans || !rec.plans.length) {
-    plansEl.innerHTML = "<p class='hint'>No plans — need a direction, a stop, and an entry or mark price.</p>";
+  currentRec = rec;
+  const plans = rec.plans || [];
+  if (!plans.length) {
+    plansEl.innerHTML = "<p class='hint'>Need a direction and a stop to size this.</p>";
+    takeBtn.disabled = true;
+    return;
   }
+  if (!plans.some((p) => p.id === selectedPlan)) selectedPlan = "mid";
+  plans.forEach((p) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "pick " + p.id + (p.id === selectedPlan ? " on" : "");
+    btn.disabled = !p.policy_ok;
+    btn.innerHTML = `
+      <h3>${p.label}</h3>
+      <div class="wl"><span class="win">${money(p.win_if_tp)}</span><span class="loss">−${money(p.loss_if_sl)}</span></div>
+      <div class="nums">${p.leverage}x · 1:${Number(p.reward_risk).toFixed(1)}</div>
+    `;
+    btn.onclick = () => {
+      selectedPlan = p.id;
+      renderPlans(rec);
+    };
+    plansEl.appendChild(btn);
+  });
+  const chosen = plans.find((p) => p.id === selectedPlan);
+  takeBtn.disabled = !chosen || !chosen.policy_ok;
+  takeBtn.textContent = chosen
+    ? (hasUserKeys() && document.getElementById("send-live").checked ? "Send " + chosen.label : "Take " + chosen.label)
+    : "Take trade";
 }
 
 async function loadRecommend(message) {
   currentRaw = message;
-  setFlow(2);
-  analysisEl.innerHTML = '<p class="hint">Mapping pair on Binance…</p>';
+  analysisEl.innerHTML = '<p class="hint">Sizing on Binance…</p>';
   try {
     const rec = await post("/api/recommend", { message, equity: Number(equityEl.value) || 1000 });
     renderAnalysis(rec);
     renderPlans(rec);
-    setFlow(3);
   } catch (err) {
     analysisEl.innerHTML = `<p class="warn">${err.message}</p>`;
     plansEl.innerHTML = "";
+    takeBtn.disabled = true;
   }
 }
 
 async function execute(message, plan, details) {
+  const keys = userKeys();
   const sendBox = document.getElementById("send-live");
-  const wantLive = !!(sendBox && sendBox.checked);
+  const wantLive = !!(sendBox && sendBox.checked && keys.api_key);
   if (wantLive) {
     const ok = window.confirm(
-      "Send a MARKET order to Binance USDⓈ-M?\n\n" +
-      (details ? `${details.label}: ${details.leverage}x ${details.qty} qty\nSL ${details.stop}  TP ${details.take_profit}\n` : "") +
-      "This spends real margin if keys are set."
+      "Send this to YOUR Binance futures account?\n\n" +
+      (details ? `${details.label}: ${details.leverage}x\nSL ${details.stop}  TP ${details.take_profit}\n` : "")
     );
     if (!ok) {
-      msgEl.textContent = "Cancelled. Nothing sent.";
+      msgEl.textContent = "Cancelled.";
       return;
     }
   }
-  msgEl.textContent = wantLive ? "Sending to Binance…" : "Building dry-run…";
+  msgEl.textContent = wantLive ? "Sending…" : "Building ticket…";
   try {
     const data = await post("/api/execute", {
-      message, plan, equity: Number(equityEl.value) || 1000, confirm: true, live: wantLive,
+      message,
+      plan,
+      equity: Number(equityEl.value) || 1000,
+      confirm: true,
+      live: wantLive,
+      api_key: keys.api_key || "",
+      secret: keys.secret || "",
     });
     const p = data.plan;
     msgEl.textContent = data.dry_run
-      ? `Dry-run ${p.label}: ${p.leverage}x ${data.recommendation && data.recommendation.direction} ${data.recommendation && data.recommendation.binance_symbol}. SL ${p.stop} TP ${p.take_profit}. Nothing sent.${data.hint ? " " + data.hint : ""}`
-      : `Sent ${p.label} on Binance. Order ${data.order && data.order.id}`;
+      ? `${p.label} ready: ${p.leverage}x ${data.recommendation && data.recommendation.binance_symbol}. SL ${p.stop} TP ${p.take_profit}. Not sent.`
+      : `Sent ${p.label}. Order ${data.order && data.order.id}`;
   } catch (err) {
     msgEl.textContent = err.message;
   }
@@ -192,35 +203,32 @@ function renderAccount(snap) {
   } else if (snap.status === "linked" || snap.status === "watching") {
     box.textContent = "Already linked";
   } else {
-    box.textContent = snap.error || "QR appears here";
+    box.textContent = snap.error || "QR";
   }
   pill.classList.remove("ok", "warn");
   if (snap.status === "linked" || snap.status === "watching") {
     if (qrPoll) { clearInterval(qrPoll); qrPoll = null; }
     const name = (snap.user && (snap.user.username || snap.user.first_name)) || "account";
     const watch = snap.watch && snap.watch.title ? ` watching ${snap.watch.title}` : "";
-    status.textContent = `Linked as ${name}.${watch}`;
+    status.textContent = `Linked as ${name}.${watch} New group posts go to every user on fxglitch.xyz.`;
     pill.textContent = "telegram: linked";
     pill.classList.add("ok");
   } else if (snap.status === "need_api") {
-    status.textContent = "Set TELEGRAM_API_ID and TELEGRAM_API_HASH from https://my.telegram.org then restart python serve.py.";
-    pill.textContent = "telegram: need API id";
+    status.textContent = "Set TELEGRAM_API_ID and TELEGRAM_API_HASH in .env, then restart.";
     pill.classList.add("warn");
   } else if (snap.status === "need_library") {
     status.textContent = "Run: pip install telethon qrcode";
     pill.classList.add("warn");
   } else if (snap.status === "vercel") {
-    status.textContent = snap.error;
-    pill.textContent = "telegram: use local serve.py";
+    status.textContent = "Scan Telegram on this PC at http://127.0.0.1:8765 — not on the public site.";
     pill.classList.add("warn");
   } else if (snap.status === "need_password") {
-    status.textContent = "This account has 2FA. Enter the password.";
+    status.textContent = "2FA password needed.";
     pwWrap.classList.remove("hidden");
     document.getElementById("btn-password").classList.remove("hidden");
   } else if (snap.status === "need_scan") {
-    const age = snap.qr_age != null ? ` This code is ${snap.qr_age}s old and refreshes every 20s.` : "";
-    status.textContent = "Scan THIS code now (Telegram → Settings → Devices → Link Desktop Device)." + age + " Old codes say auth token expired.";
-    pill.textContent = "telegram: scan QR";
+    const age = snap.qr_age != null ? ` Code is ${snap.qr_age}s old.` : "";
+    status.textContent = "Scan THIS QR now (Telegram → Settings → Devices → Link Desktop Device)." + age;
     pill.classList.add("warn");
     startQrPoll();
   } else {
@@ -229,19 +237,28 @@ function renderAccount(snap) {
 }
 
 async function refreshInbox() {
-  const box = await get("/api/inbox");
-  let signals = box.signals || [];
+  let signals = [];
+  let box = { signals: [], account: null };
+  try {
+    box = await get("/api/inbox");
+    signals = box.signals || [];
+  } catch (_err) {}
   const onlyDemo = signals.length === 1 && signals[0].id === "demo-kaito";
-  if (onlyDemo) {
+  if (!signals.length || onlyDemo) {
     try {
       const live = await (await fetch("/live-signals.json")).json();
       if (live.signals && live.signals.length) signals = live.signals;
+    } catch (_err) {}
+    try {
+      const remote = await get("/api/signals");
+      if (remote.signals && remote.signals.length && remote.signals[0].id !== "demo-kaito") {
+        signals = remote.signals;
+      }
     } catch (_err) {}
   }
   box.signals = signals;
   renderInbox(signals);
   if (box.account) renderAccount(box.account);
-  if (signals.length && !currentRaw) setFlow(1);
   return box;
 }
 
@@ -257,53 +274,30 @@ function fillChats(data) {
     sel.appendChild(opt);
   });
   const wanted = data.watch && data.watch.chat_id;
-  if (wanted) {
-    sel.value = String(wanted);
-  }
+  if (wanted) sel.value = String(wanted);
   if (!chats.length) {
     const opt = document.createElement("option");
     opt.value = "";
-    opt.textContent = data.error || "No groups yet — scan the QR first";
+    opt.textContent = data.error || "No groups yet";
     sel.appendChild(opt);
   }
 }
 
+function paintKeysButton() {
+  const btn = document.getElementById("btn-keys");
+  btn.textContent = hasUserKeys() ? "Binance connected" : "Connect Binance";
+}
+
 async function boot() {
+  paintKeysButton();
+  const savedEq = userKeys().equity;
+  if (savedEq) equityEl.value = savedEq;
+  document.getElementById("user-key").value = userKeys().api_key || "";
+  document.getElementById("user-secret").value = userKeys().secret || "";
+  document.getElementById("send-live").checked = !!userKeys().live;
   try {
-    const health = await get("/api/health");
-    liveAllowed = !!health.live_allowed;
-    const hint = document.getElementById("live-hint");
-    const bn = document.getElementById("bn-status");
-    const mode = document.getElementById("mode-pill");
-    bn.classList.remove("ok", "warn", "live");
-    mode.classList.remove("ok", "warn", "live");
-    if (!health.binance) {
-      hint.textContent = isAdmin
-        ? "Orders are dry-run until you put BINANCE_API_KEY and BINANCE_SECRET_KEY in .env and restart python serve.py. Then tick 'Send to Binance'."
-        : "Same stop as the signal. Size, leverage and take-profit change with the plan. Nothing is sent until you confirm.";
-      bn.textContent = "binance: no keys";
-      bn.classList.add("warn");
-      mode.textContent = "dry-run default";
-    } else if (!liveAllowed) {
-      hint.textContent = isAdmin
-        ? "Binance keys are present but live send is disabled on the hosted site. Use http://127.0.0.1:8765 to send."
-        : "Plans are dry-run on the public desk. Confirm a plan to see the sized order. Nothing is sent from this site.";
-      bn.textContent = "binance: keys (hosted = dry-run)";
-      bn.classList.add("ok");
-      mode.textContent = "dry-run";
-    } else {
-      hint.textContent = "Keys loaded. Tick 'Send to Binance' and confirm to place a market order with SL/TP.";
-      bn.textContent = "binance: keys ready";
-      bn.classList.add("ok");
-      mode.textContent = "local send ready";
-      mode.classList.add("live");
-    }
-  } catch (_err) {
-    const hint = document.getElementById("inbox-hint");
-    if (hint) {
-      hint.textContent = "Desk is not running. Double-click start-desk.bat in the FX-GLITCH folder (or run python serve.py).";
-    }
-  }
+    await get("/api/health");
+  } catch (_err) {}
   let box = { signals: [] };
   try {
     box = await refreshInbox();
@@ -312,11 +306,9 @@ async function boot() {
   }
   const account = box.account || {};
   if (isAdmin && (account.status === "linked" || account.status === "watching")) {
-    try {
-      fillChats(await get("/api/telegram?action=chats"));
-    } catch (_err) {}
+    try { fillChats(await get("/api/telegram?action=chats")); } catch (_err) {}
     const hint = document.getElementById("inbox-hint");
-    if (hint) hint.textContent = "Loading today's trades from Telegram…";
+    if (hint) hint.textContent = "Loading today's trades…";
     try {
       await scanToday();
       box = await refreshInbox();
@@ -330,7 +322,7 @@ async function boot() {
     renderInbox(box.signals);
     loadRecommend(pick.raw);
   }
-  setInterval(refreshInbox, 5000);
+  setInterval(refreshInbox, 8000);
 }
 
 document.getElementById("btn-ingest").onclick = async () => {
@@ -343,9 +335,31 @@ document.getElementById("btn-ingest").onclick = async () => {
   loadRecommend(message);
 };
 
-document.getElementById("send-live").onchange = () => {
-  if (!currentRaw) return;
-  loadRecommend(currentRaw);
+document.getElementById("btn-take").onclick = () => {
+  if (!currentRaw || !currentRec) return;
+  const details = (currentRec.plans || []).find((p) => p.id === selectedPlan);
+  execute(currentRaw, selectedPlan, details);
+};
+
+document.getElementById("btn-keys").onclick = () => keysDlg.showModal();
+document.getElementById("keys-form").addEventListener("submit", (ev) => {
+  if (ev.submitter && ev.submitter.id === "btn-save-keys") {
+    localStorage.setItem(KEYS, JSON.stringify({
+      api_key: document.getElementById("user-key").value.trim(),
+      secret: document.getElementById("user-secret").value.trim(),
+      equity: Number(equityEl.value) || 1000,
+      live: document.getElementById("send-live").checked,
+    }));
+    paintKeysButton();
+    if (currentRec) renderPlans(currentRec);
+  }
+});
+
+equityEl.onchange = () => {
+  const k = userKeys();
+  k.equity = Number(equityEl.value) || 1000;
+  localStorage.setItem(KEYS, JSON.stringify(k));
+  if (currentRaw) loadRecommend(currentRaw);
 };
 
 let qrPoll = null;
@@ -364,18 +378,13 @@ function startQrPoll() {
 }
 
 document.getElementById("btn-qr").onclick = async () => {
-  document.getElementById("qr-status").textContent = "Minting a fresh QR… scan as soon as it appears.";
-  const snap = await get("/api/telegram?action=qr");
-  renderAccount(snap);
+  document.getElementById("qr-status").textContent = "Minting a fresh QR…";
+  renderAccount(await get("/api/telegram?action=qr"));
   startQrPoll();
 };
-
 document.getElementById("btn-password").onclick = async () => {
-  const password = document.getElementById("tg-password").value;
-  const snap = await post("/api/telegram", { action: "password", password });
-  renderAccount(snap);
+  renderAccount(await post("/api/telegram", { action: "password", password: document.getElementById("tg-password").value }));
 };
-
 document.getElementById("btn-chats").onclick = async () => {
   const data = await get("/api/telegram?action=chats");
   renderAccount(data);
@@ -391,7 +400,7 @@ async function scanToday() {
   const kept = (data.signals || []).filter((s) => s.still_good);
   if (hint) {
     hint.textContent = data.ok
-      ? `${data.kept} still good to enter from ${data.scanned} setups today.`
+      ? `${data.kept} still good to enter.`
       : (data.error || "scan failed");
   }
   if (kept[0]) {
@@ -403,9 +412,7 @@ async function scanToday() {
 }
 
 document.getElementById("btn-scan").onclick = async () => {
-  try {
-    await scanToday();
-  } catch (err) {
+  try { await scanToday(); } catch (err) {
     const hint = document.getElementById("inbox-hint");
     if (hint) hint.textContent = err.message;
   }
@@ -415,15 +422,14 @@ document.getElementById("btn-watch").onclick = async () => {
   const sel = document.getElementById("chat-list");
   const status = document.getElementById("qr-status");
   if (!sel.value || !/^-?\d+$/.test(sel.value)) {
-    if (status) status.textContent = "Load my groups and pick the Bitunix chat first.";
+    if (status) status.textContent = "Pick a group first.";
     return;
   }
-  const snap = await post("/api/telegram", {
+  renderAccount(await post("/api/telegram", {
     action: "watch",
     chat_id: sel.value,
     title: sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].textContent : "",
-  });
-  renderAccount(snap);
+  }));
 };
 
 boot();

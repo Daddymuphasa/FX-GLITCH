@@ -11,7 +11,9 @@ from pathlib import Path
 from .plans import recommend
 
 ROOT = Path(__file__).resolve().parents[2]
-PATH = Path(os.environ.get("FXGLITCH_INBOX", str(ROOT / "data" / "inbox.json")))
+PATH = Path("/tmp/fxglitch-inbox.json") if os.environ.get("VERCEL") else Path(
+    os.environ.get("FXGLITCH_INBOX", str(ROOT / "data" / "inbox.json"))
+)
 MAX = 80
 _MEMORY: list[dict] = []
 
@@ -74,7 +76,10 @@ def _load_live() -> list[dict]:
 
 
 def publish_live() -> list[dict]:
-    good = [row for row in _load() if row.get("still_good") is True][:20]
+    rows = _load()
+    good = [row for row in rows if row.get("still_good") is True][:20]
+    if not good:
+        good = [row for row in rows if row.get("direction") and row.get("binance_symbol")][:20]
     try:
         LIVE_PATH.parent.mkdir(parents=True, exist_ok=True)
         LIVE_PATH.write_text(
@@ -83,7 +88,37 @@ def publish_live() -> list[dict]:
         )
     except OSError:
         pass
+    push_to_host(good)
     return good
+
+
+def replace_signals(rows: list[dict]) -> list[dict]:
+    clean = [row for row in rows if isinstance(row, dict) and row.get("raw")][:MAX]
+    _save(clean)
+    return list_signals()
+
+
+def push_to_host(rows: list[dict] | None = None) -> None:
+    hook = os.environ.get("FXGLITCH_INBOX_WEBHOOK", "").strip()
+    if not hook or os.environ.get("VERCEL"):
+        return
+    url = hook
+    if url.rstrip("/").endswith("/api/telegram"):
+        url = url[: url.rfind("/api/telegram")] + "/api/signals"
+    elif not url.rstrip("/").endswith("/api/signals"):
+        url = url.rstrip("/") + "/api/signals"
+    payload = json.dumps({"signals": rows if rows is not None else publish_live()}).encode()
+    try:
+        import urllib.request
+        req = urllib.request.Request(
+            url,
+            data=payload,
+            headers={"Content-Type": "application/json", "User-Agent": "FX-GLITCH/desk"},
+            method="POST",
+        )
+        urllib.request.urlopen(req, timeout=15).read()
+    except Exception:
+        pass
 
 
 def list_signals() -> list[dict]:

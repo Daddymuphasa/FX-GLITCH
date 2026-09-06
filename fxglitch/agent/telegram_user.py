@@ -236,6 +236,8 @@ class TelegramBridge:
                 telegram_id=f"{event.chat_id}:{event.id}",
                 chat=title,
             )
+            from .inbox import publish_live
+            await asyncio.to_thread(publish_live)
             hook = os.environ.get("FXGLITCH_INBOX_WEBHOOK", "").strip()
             if hook:
                 await asyncio.to_thread(_forward, hook, text)

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>FX-GLITCH — Signal desk</title>
+  <title>FX-GLITCH</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -19,86 +19,80 @@
   </script>
 </head>
 <body>
-  <aside class="operator" aria-hidden="true">
+  <div class="backdrop" aria-hidden="true">
     <img src="/assets/operator.jpg" alt="" />
-    <div class="operator-fade"></div>
-  </aside>
+  </div>
 
   <main class="app">
-    <header class="topbar">
+    <header class="glass topbar">
       <div class="brand">
         <div class="brand-visor" aria-hidden="true"></div>
         <div>
-          <p class="eyebrow">Binance USDT-M desk</p>
+          <p class="eyebrow">USDT-M desk</p>
           <h1>FX-GLITCH</h1>
         </div>
       </div>
-      <p class="lede">Tap a trade. See the Binance pair. Pick how much risk you want. Nothing sends until you confirm.</p>
-      <div class="pills">
-        <span class="pill" id="mode-pill">dry-run</span>
-        <span class="pill admin-only" id="tg-status">telegram: not connected</span>
-        <span class="pill admin-only" id="bn-status">binance: no keys</span>
-      </div>
+      <button id="btn-keys" type="button">Connect Binance</button>
     </header>
 
-    <section class="admin-desk admin-only" id="admin-desk">
+    <section class="glass admin-desk admin-only" id="admin-desk">
       <div class="panel-head">
-        <h2>Admin · scan Telegram here</h2>
-        <button id="btn-scan" type="button">Load today's trades</button>
+        <h2>Admin · Telegram</h2>
+        <button id="btn-scan" type="button">Refresh trades</button>
       </div>
-      <p id="qr-status" class="hint">This is the only place to add Telegram. Open Telegram → Settings → Devices → Link Desktop Device, then scan the QR. If last session already linked this PC, trades load by themselves.</p>
+      <p id="qr-status" class="hint">Scan here on this PC. Telegram → Settings → Devices → Link Desktop Device.</p>
+      <span class="pill admin-only" id="tg-status">telegram</span>
+      <span class="pill admin-only" id="bn-status">binance</span>
       <div class="qr-row">
-        <div class="qr-box" id="qr-box">QR appears here</div>
+        <div class="qr-box" id="qr-box">QR</div>
         <div>
-          <label class="hidden" id="pw-wrap">2FA password <input id="tg-password" type="password" /></label>
+          <label class="hidden" id="pw-wrap">2FA <input id="tg-password" type="password" /></label>
           <div class="row-actions">
             <button id="btn-qr" class="primary" type="button">Show QR</button>
             <button id="btn-password" class="hidden" type="button">Submit 2FA</button>
-            <button id="btn-chats" type="button">Load my groups</button>
+            <button id="btn-chats" type="button">My groups</button>
           </div>
           <select id="chat-list"></select>
           <button id="btn-watch" type="button">Watch this group</button>
+          <textarea id="raw" rows="4" placeholder="Paste a signal"></textarea>
+          <button id="btn-ingest" type="button">Analyse paste</button>
         </div>
       </div>
     </section>
 
-    <section class="desk">
-      <article class="inbox">
-        <div class="panel-head">
-          <h2>Open trades</h2>
-        </div>
-        <p class="hint" id="inbox-hint">Still-valid setups from the desk. Tap one.</p>
-        <div id="inbox"></div>
-        <label class="equity-row">Your balance (USDT)
-          <input id="equity" type="number" inputmode="decimal" value="1000" min="10" step="10" />
-        </label>
-        <div class="admin-only">
-          <textarea id="raw" rows="5" placeholder="Paste a Bitunix group signal"></textarea>
-          <button id="btn-ingest" class="primary" type="button">Analyse on Binance</button>
-        </div>
-      </article>
-
-      <article class="analysis">
-        <h2>This trade</h2>
-        <div id="analysis" class="hint">Tap an open trade to see the pair, stop, and four plans.</div>
-      </article>
+    <section class="glass feed">
+      <h2>Live setups</h2>
+      <p class="hint" id="inbox-hint">Tap one trade. Then pick how hard you want to play it.</p>
+      <div id="inbox"></div>
     </section>
 
-    <section class="plans-wrap">
-      <div class="panel-head">
-        <div>
-          <h2>Pick a risk</h2>
-          <p class="hint" id="live-hint">Same stop. Size and take-profit change with the plan. Swipe on a phone.</p>
-        </div>
-        <label id="live-label" class="toggle admin-only">
-          <input id="send-live" type="checkbox" />
-          <span>Send to Binance</span>
-        </label>
-      </div>
-      <div id="plans" class="plans"></div>
+    <section class="glass trade" id="trade">
+      <h2>Your ticket</h2>
+      <div id="analysis" class="hint">Nothing selected yet.</div>
+      <div id="plans" class="risk-picks"></div>
       <p id="execute-msg" class="hint banner"></p>
     </section>
   </main>
+
+  <div class="take-bar glass">
+    <label class="equity-mini">USDT <input id="equity" type="number" inputmode="decimal" value="1000" min="10" step="10" /></label>
+    <button id="btn-take" class="primary" type="button" disabled>Take trade</button>
+  </div>
+
+  <dialog id="keys-dialog" class="glass">
+    <form method="dialog" id="keys-form">
+      <h2>Your Binance</h2>
+      <p class="hint">Keys stay on this phone/computer. They are only sent when you tap Take trade. Create a futures key with no withdrawal.</p>
+      <label>API key <input id="user-key" type="text" autocomplete="off" /></label>
+      <label>Secret <input id="user-secret" type="password" autocomplete="off" /></label>
+      <label class="toggle"><input id="send-live" type="checkbox" /> Send live (off = dry-run)</label>
+      <menu>
+        <button value="cancel" type="submit">Close</button>
+        <button id="btn-save-keys" class="primary" value="default" type="submit">Save</button>
+      </menu>
+    </form>
+  </dialog>
+
   <script src="/app.js"></script>
 </body>
 </html>

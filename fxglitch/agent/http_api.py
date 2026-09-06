@@ -12,7 +12,7 @@ from urllib.parse import parse_qs, urlparse
 from ..live.guards import Limits
 from ..venues.binance import Binance
 from ..venues.base import OrderRequest, VenueError
-from .inbox import ingest, list_signals, publish_live
+from .inbox import ingest, list_signals, publish_live, replace_signals
 from .mcp_server import TOOLS
 from .plans import plan_by_id, proposal_from_plan, recommend
 from .positioning import fetch_briefing
@@ -99,6 +99,7 @@ def dispatch(method: str, path: str, query: dict, body: dict):
             "dry_run": not live_ok,
             "binance": bool(venue.authenticated),
             "live_allowed": live_ok,
+            "user_keys_ok": True,
         })
     if path == "/api/hackathon":
         return _json(HACKATHON)
@@ -161,11 +162,13 @@ def dispatch(method: str, path: str, query: dict, body: dict):
         if not plan["policy_ok"]:
             return _json({"error": plan["policy_reason"], "recommendation": rec.to_dict()}, 400)
         proposal = proposal_from_plan(rec, plan)
-        want_live = bool(body.get("live")) and bool(body.get("confirm")) and not os.environ.get("VERCEL")
-        venue = Binance()
+        user_key = str(body.get("api_key") or "").strip()
+        user_secret = str(body.get("secret") or "").strip()
+        venue = Binance(api_key=user_key, secret_key=user_secret) if user_key else Binance()
+        want_live = bool(body.get("live")) and bool(body.get("confirm")) and venue.authenticated
         if want_live and not venue.authenticated:
             return _json({
-                "error": "No Binance keys. Add BINANCE_API_KEY and BINANCE_SECRET_KEY to .env, restart python serve.py, then confirm again.",
+                "error": "Connect your Binance API key and secret to send. Until then this is a dry-run.",
                 "dry_run": True,
                 "plan": plan,
             }, 400)
@@ -195,7 +198,12 @@ def dispatch(method: str, path: str, query: dict, body: dict):
                           "plan": plan, "recommendation": rec.to_dict()})
         return _json({"sent": False, "dry_run": True, "plan": plan,
                       "proposal": proposal.to_dict(), "recommendation": rec.to_dict(),
-                      "hint": "Check 'Send to Binance' and confirm. Needs API keys in .env."})
+                      "hint": "Connect Binance on this device to send. This tap was a dry-run."})
+    if path == "/api/signals" and method == "GET":
+        return _json({"signals": list_signals()})
+    if path == "/api/signals" and method == "POST":
+        rows = body.get("signals") if isinstance(body.get("signals"), list) else []
+        return _json({"ok": True, "signals": replace_signals(rows)})
     if path == "/api/telegram" and method == "GET":
         action = (query.get("action") or ["status"])[0]
         if action == "qr":
@@ -225,7 +233,7 @@ def dispatch(method: str, path: str, query: dict, body: dict):
         return _json({"ok": True, "item": item})
     if path not in ("/api/health", "/api/hackathon", "/api/tools", "/api/demo",
                     "/api/briefing", "/api/cycle", "/api/signal", "/api/inbox",
-                    "/api/recommend", "/api/execute", "/api/telegram"):
+                    "/api/recommend", "/api/execute", "/api/telegram", "/api/signals"):
         return _json({"error": "not found"}, 404)
     return _json({"error": "method not allowed"}, 405)
 

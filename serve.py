@@ -69,6 +69,7 @@ def main() -> None:
 
     _ensure_deps()
     _load_env(os.path.join(ROOT, ".env"))
+    os.environ.setdefault("FXGLITCH_INBOX_WEBHOOK", "https://fxglitch.xyz/api/telegram")
 
     from http.server import ThreadingHTTPServer
 
