@@ -253,6 +253,71 @@ def recommend(
     return rec
 
 
+def live_entry_check(
+    *,
+    direction: str | None,
+    entry: float | None,
+    stop: float | None,
+    take_profits: list[float],
+    mark: float | None,
+) -> dict:
+    """Is this signal still enterable at the current price?
+
+    Uses the live mark vs the original SL/TP. Does not invent a win rate.
+    """
+    if direction not in ("LONG", "SHORT"):
+        return {"ok": False, "reason": "no direction", "live_rr": None, "mark": mark}
+    if stop is None or stop <= 0:
+        return {"ok": False, "reason": "no stop", "live_rr": None, "mark": mark}
+    if mark is None or mark <= 0:
+        return {"ok": False, "reason": "no live mark to judge the entry", "live_rr": None, "mark": mark}
+    tp = take_profits[0] if take_profits else None
+    if direction == "LONG":
+        if mark <= stop:
+            return {"ok": False, "reason": "stop already hit (mark at or below SL)", "live_rr": None, "mark": mark}
+        if tp is not None and mark >= tp:
+            return {"ok": False, "reason": "take-profit already reached", "live_rr": None, "mark": mark}
+        risk = mark - stop
+        reward = (tp - mark) if tp else None
+    else:
+        if mark >= stop:
+            return {"ok": False, "reason": "stop already hit (mark at or above SL)", "live_rr": None, "mark": mark}
+        if tp is not None and mark <= tp:
+            return {"ok": False, "reason": "take-profit already reached", "live_rr": None, "mark": mark}
+        risk = stop - mark
+        reward = (mark - tp) if tp else None
+    if risk <= 0:
+        return {"ok": False, "reason": "no room to the stop from here", "live_rr": None, "mark": mark}
+    live_rr = (reward / risk) if reward is not None else None
+    if live_rr is not None and live_rr < 1.0:
+        return {"ok": False, "reason": f"live reward:risk is 1:{live_rr:.2f} — chasing, not entering",
+                "live_rr": live_rr, "mark": mark}
+    if entry and tp:
+        span = abs(tp - entry)
+        if span > 0:
+            progress = abs(mark - entry) / span
+            toward_tp = (mark - entry) if direction == "LONG" else (entry - mark)
+            if toward_tp > 0 and progress >= 0.8:
+                return {"ok": False, "reason": "price already ran ~80% of the way to TP — late",
+                        "live_rr": live_rr, "mark": mark}
+    reason = "mark still between SL and TP"
+    if live_rr is not None:
+        reason += f"; live R:R 1:{live_rr:.2f}"
+    return {"ok": True, "reason": reason, "live_rr": live_rr, "mark": mark}
+
+
+def fetch_mark(symbol: str | None) -> float | None:
+    if not symbol:
+        return None
+    try:
+        from ..venues.binance import Binance
+        row = Binance()._request("GET", "/fapi/v1/premiumIndex", query={"symbol": symbol})
+        value = float(row.get("markPrice") or 0)
+        return value or None
+    except Exception:
+        return None
+
+
 def plan_by_id(rec: Recommendation, plan_id: str) -> dict | None:
     for plan in rec.plans:
         if plan["id"] == plan_id:

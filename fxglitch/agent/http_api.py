@@ -177,6 +177,11 @@ def dispatch(method: str, path: str, query: dict, body: dict):
             return _json(bridge.ensure_qr())
         if action == "chats":
             return _json(bridge.chats())
+        if action == "scan":
+            result = bridge.scan_today()
+            result["signals"] = [s for s in list_signals() if s.get("still_good")]
+            result["account"] = bridge.snapshot()
+            return _json(result)
         return _json(bridge.snapshot())
     if path == "/api/telegram" and method == "POST":
         action = body.get("action")

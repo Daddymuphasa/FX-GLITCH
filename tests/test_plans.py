@@ -74,6 +74,25 @@ class TestTelegramExtract(unittest.TestCase):
         self.assertEqual(title, "Bitunix signals")
 
 
+class TestLiveEntry(unittest.TestCase):
+    def test_long_still_inside_channel(self):
+        from fxglitch.agent.plans import live_entry_check
+        check = live_entry_check(direction="LONG", entry=100, stop=90, take_profits=[120], mark=102)
+        self.assertTrue(check["ok"])
+        self.assertGreater(check["live_rr"], 1)
+
+    def test_long_stop_hit_is_dead(self):
+        from fxglitch.agent.plans import live_entry_check
+        check = live_entry_check(direction="LONG", entry=100, stop=90, take_profits=[120], mark=89)
+        self.assertFalse(check["ok"])
+        self.assertIn("stop already hit", check["reason"])
+
+    def test_chase_destroys_rr(self):
+        from fxglitch.agent.plans import live_entry_check
+        check = live_entry_check(direction="LONG", entry=100, stop=90, take_profits=[120], mark=118)
+        self.assertFalse(check["ok"])
+
+
 class TestMultiTp(unittest.TestCase):
     def test_tp1_tp2(self):
         sig = parse_signal("ETHUSDT long entry 3000 sl 2900 tp1 3200 tp2 3400 lev 8x")

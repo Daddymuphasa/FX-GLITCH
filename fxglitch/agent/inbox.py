@@ -64,7 +64,8 @@ def list_signals() -> list[dict]:
 
 
 def ingest(message: str, *, source: str = "paste", telegram_id: str | None = None,
-           chat: str | None = None) -> dict:
+           chat: str | None = None, posted_at: str | None = None,
+           extra: dict | None = None) -> dict:
     text = (message or "").strip()
     if not text:
         raise ValueError("empty signal")
@@ -72,6 +73,9 @@ def ingest(message: str, *, source: str = "paste", telegram_id: str | None = Non
     key = telegram_id or f"{source}:{hash(text)}"
     for row in rows:
         if row.get("telegram_id") == key or (telegram_id and row.get("telegram_id") == telegram_id):
+            if extra:
+                row.update(extra)
+                _save(rows)
             return row
     rec = recommend(text, equity=1000.0)
     item = {
@@ -80,7 +84,8 @@ def ingest(message: str, *, source: str = "paste", telegram_id: str | None = Non
         "source": source,
         "chat": chat,
         "raw": text,
-        "received_at": _now(),
+        "received_at": posted_at or _now(),
+        "posted_at": posted_at,
         "bitunix_symbol": rec.bitunix_symbol,
         "binance_symbol": rec.binance_symbol,
         "direction": rec.direction,
@@ -88,6 +93,8 @@ def ingest(message: str, *, source: str = "paste", telegram_id: str | None = Non
         "listed": rec.pair.get("listed"),
         "tradeable": rec.pair.get("tradeable"),
     }
+    if extra:
+        item.update(extra)
     rows.insert(0, item)
     _save(rows)
     return item

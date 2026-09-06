@@ -16,10 +16,12 @@ import io
 import json
 import os
 import threading
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from ..signal_copy import parse_signal
 from .inbox import ingest
+from .plans import fetch_mark, live_entry_check, recommend
 
 ROOT = Path(__file__).resolve().parents[2]
 SESSION = ROOT / "data" / "telegram"
@@ -74,6 +76,8 @@ class TelegramBridge:
         self._me: dict | None = None
         self._need_password = False
         self._lock = threading.Lock()
+        self._wait_task: asyncio.Task | None = None
+        self._qr_started = 0.0
 
     def start(self) -> None:
         if os.environ.get("VERCEL"):
@@ -82,6 +86,12 @@ class TelegramBridge:
             return
         self._thread = threading.Thread(target=self._run_loop, name="tg-bridge", daemon=True)
         self._thread.start()
+        session_file = Path(str(SESSION) + ".session")
+        if session_file.exists():
+            try:
+                self._call(self._boot(), timeout=45)
+            except Exception as exc:
+                self._error = str(exc)
 
     def _run_loop(self) -> None:
         self._loop = asyncio.new_event_loop()
@@ -124,39 +134,59 @@ class TelegramBridge:
     async def _new_qr(self) -> None:
         if self._client is None:
             return
+        if self._wait_task is not None:
+            self._wait_task.cancel()
+            self._wait_task = None
         self._qr = await self._client.qr_login()
-        self._qr_url = self._qr.url
-        try:
-            self._qr_png = _qr_image(self._qr.url)
-        except Exception:
-            self._qr_png = ""
+        await self._publish_qr()
         self._status = "need_scan"
         self._error = ""
-        asyncio.create_task(self._wait_qr())
+        self._wait_task = asyncio.create_task(self._wait_qr())
+
+    async def _publish_qr(self) -> None:
+        import time
+        self._qr_url = self._qr.url if self._qr is not None else ""
+        self._qr_started = time.time()
+        try:
+            self._qr_png = _qr_image(self._qr_url) if self._qr_url else ""
+        except Exception:
+            self._qr_png = ""
+
+    async def _refresh_token(self) -> None:
+        try:
+            if self._qr is not None:
+                self._qr = await self._qr.recreate()
+            else:
+                self._qr = await self._client.qr_login()
+        except Exception:
+            self._qr = await self._client.qr_login()
+        await self._publish_qr()
+        self._error = ""
 
     async def _wait_qr(self) -> None:
         from telethon.errors import SessionPasswordNeededError
-        try:
-            await self._qr.wait(timeout=90)
-        except SessionPasswordNeededError:
-            self._need_password = True
-            self._status = "need_password"
-            return
-        except Exception as exc:
-            self._status = "need_scan"
-            self._error = str(exc)
+        while self._status == "need_scan" and self._qr is not None:
             try:
-                if self._qr is not None:
-                    self._qr = await self._qr.recreate()
-                    self._qr_url = self._qr.url
-                    self._qr_png = _qr_image(self._qr.url)
-                    asyncio.create_task(self._wait_qr())
-            except Exception:
-                pass
+                # Telegram tokens die in ~30s. Recreate before that.
+                await asyncio.wait_for(self._qr.wait(), timeout=20)
+            except SessionPasswordNeededError:
+                self._need_password = True
+                self._status = "need_password"
+                return
+            except asyncio.CancelledError:
+                return
+            except asyncio.TimeoutError:
+                await self._refresh_token()
+                continue
+            except Exception as exc:
+                self._error = str(exc)
+                await self._refresh_token()
+                await asyncio.sleep(1)
+                continue
+            from telethon import events
+            await self._mark_linked()
+            await self._listen(events)
             return
-        from telethon import events
-        await self._mark_linked()
-        await self._listen(events)
 
     async def _mark_linked(self) -> None:
         me = await self._client.get_me()
@@ -199,6 +229,85 @@ class TelegramBridge:
 
         if watch:
             self._status = "watching"
+            asyncio.create_task(self._scan_today())
+
+    def _today_start(self) -> datetime:
+        try:
+            from zoneinfo import ZoneInfo
+            now = datetime.now(ZoneInfo("Africa/Lagos"))
+        except Exception:
+            now = datetime.now(timezone(timedelta(hours=1)))
+        return now.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc)
+
+    async def _scan_today(self) -> dict:
+        watch = _load_watch()
+        chat_id = watch.get("chat_id")
+        if not chat_id or self._client is None:
+            return {"ok": False, "error": "not watching a group yet", "scanned": 0, "kept": 0}
+        since = self._today_start()
+        entity = int(chat_id)
+        scanned = 0
+        kept = 0
+        skipped = 0
+        seen = 0
+        samples: list[str] = []
+        try:
+            async for msg in self._client.iter_messages(entity, limit=250):
+                msg_time = msg.date
+                if msg_time.tzinfo is None:
+                    msg_time = msg_time.replace(tzinfo=timezone.utc)
+                else:
+                    msg_time = msg_time.astimezone(timezone.utc)
+                if msg_time < since:
+                    break
+                seen += 1
+                text = (msg.raw_text or "").strip()
+                if text and len(samples) < 8:
+                    samples.append(text[:280])
+                if not text:
+                    skipped += 1
+                    continue
+                parsed = parse_signal(text)
+                if not parsed.symbol or not parsed.direction or parsed.stop_adjustment:
+                    skipped += 1
+                    continue
+                scanned += 1
+                posted = msg_time.strftime("%Y-%m-%dT%H:%M:%SZ")
+                rec = recommend(text, equity=1000.0)
+                mark = rec.mark or fetch_mark(rec.binance_symbol or parsed.symbol)
+                if mark and rec.entry is None:
+                    rec = recommend(text, equity=1000.0, mark=mark)
+                check = live_entry_check(
+                    direction=rec.direction,
+                    entry=rec.entry,
+                    stop=rec.stop,
+                    take_profits=rec.take_profits,
+                    mark=mark,
+                )
+                title = watch.get("title") or ""
+                extra = {
+                    "still_good": check["ok"],
+                    "still_good_reason": check["reason"],
+                    "mark": check["mark"],
+                    "live_rr": check["live_rr"],
+                    "posted_at": posted,
+                }
+                ingest(
+                    text,
+                    source="telegram",
+                    telegram_id=f"{chat_id}:{msg.id}",
+                    chat=title,
+                    posted_at=posted,
+                    extra=extra,
+                )
+                if check["ok"]:
+                    kept += 1
+        except Exception as exc:
+            return {"ok": False, "error": str(exc), "scanned": scanned, "kept": kept,
+                    "skipped": skipped, "seen": seen, "samples": samples}
+        return {"ok": True, "error": "", "scanned": scanned, "kept": kept, "skipped": skipped,
+                "seen": seen, "samples": samples,
+                "since": since.strftime("%Y-%m-%dT%H:%M:%SZ"), "chat": watch}
 
     async def _list_chats(self) -> list[dict]:
         out = []
@@ -229,6 +338,7 @@ class TelegramBridge:
             "need_api": self._status == "need_api",
             "need_library": self._status == "need_library",
             "vercel": bool(os.environ.get("VERCEL")),
+            "qr_age": int(__import__("time").time() - self._qr_started) if self._qr_started else None,
             "at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         }
 
@@ -240,13 +350,25 @@ class TelegramBridge:
             return snap
         self.start()
         try:
+            if self._status in ("linked", "watching"):
+                return self.snapshot()
             if self._client is None:
                 self._call(self._boot(), timeout=45)
-            elif self._status == "need_scan" and not self._qr_png:
+            else:
+                # Always mint a fresh token. Telegram expires the old one in ~30s.
                 self._call(self._new_qr(), timeout=30)
         except Exception as exc:
             self._error = str(exc)
         return self.snapshot()
+
+    def scan_today(self) -> dict:
+        if self._status not in ("linked", "watching"):
+            return {"ok": False, "error": "link a Telegram account first", "scanned": 0, "kept": 0}
+        try:
+            result = self._call(self._scan_today(), timeout=90)
+        except Exception as exc:
+            return {"ok": False, "error": str(exc), "scanned": 0, "kept": 0}
+        return result
 
     def chats(self) -> dict:
         if self._status not in ("linked", "watching"):

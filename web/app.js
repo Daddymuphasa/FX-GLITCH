@@ -36,8 +36,9 @@ function renderInbox(signals) {
   signals.forEach((s) => {
     const div = document.createElement("div");
     div.className = "item" + (s.id === selectedId ? " active" : "");
-    div.innerHTML = `<div>${s.direction || "?"} ${s.binance_symbol || s.bitunix_symbol || "unknown"}</div>
-      <div class="meta">${s.source} · ${s.chat || ""} · ${s.received_at || ""}</div>`;
+    const good = s.still_good === true ? " · STILL GOOD" : (s.still_good === false ? " · late/invalid" : "");
+    div.innerHTML = `<div>${s.direction || "?"} ${s.binance_symbol || s.bitunix_symbol || "unknown"}${good}</div>
+      <div class="meta">${s.source} · ${s.chat || ""} · ${s.posted_at || s.received_at || ""}${s.still_good_reason ? " · " + s.still_good_reason : ""}</div>`;
     div.onclick = () => {
       selectedId = s.id;
       rawEl.value = s.raw;
@@ -135,6 +136,7 @@ function renderAccount(snap) {
     box.textContent = snap.error || "QR appears here";
   }
   if (snap.status === "linked" || snap.status === "watching") {
+    if (qrPoll) { clearInterval(qrPoll); qrPoll = null; }
     const name = (snap.user && (snap.user.username || snap.user.first_name)) || "account";
     const watch = snap.watch && snap.watch.title ? ` watching ${snap.watch.title}` : "";
     status.textContent = `Linked as ${name}.${watch}`;
@@ -152,8 +154,10 @@ function renderAccount(snap) {
     pwWrap.classList.remove("hidden");
     document.getElementById("btn-password").classList.remove("hidden");
   } else if (snap.status === "need_scan") {
-    status.textContent = "Open Telegram on your phone → Settings → Devices → Link Desktop Device, or scan this QR.";
+    const age = snap.qr_age != null ? ` This code is ${snap.qr_age}s old and refreshes every 20s.` : "";
+    status.textContent = "Scan THIS code now (Telegram → Settings → Devices → Link Desktop Device)." + age + " Old codes say auth token expired.";
     pill.textContent = "telegram: scan QR";
+    startQrPoll();
   } else {
     status.textContent = snap.error || ("Status: " + (snap.status || "idle"));
   }
@@ -187,10 +191,26 @@ document.getElementById("btn-ingest").onclick = async () => {
   loadRecommend(message);
 };
 
+let qrPoll = null;
+function startQrPoll() {
+  if (qrPoll) return;
+  qrPoll = setInterval(async () => {
+    try {
+      const snap = await get("/api/telegram?action=status");
+      renderAccount(snap);
+      if (snap.status !== "need_scan") {
+        clearInterval(qrPoll);
+        qrPoll = null;
+      }
+    } catch (_err) {}
+  }, 2000);
+}
+
 document.getElementById("btn-qr").onclick = async () => {
-  document.getElementById("qr-status").textContent = "Starting login…";
+  document.getElementById("qr-status").textContent = "Minting a fresh QR… scan as soon as it appears.";
   const snap = await get("/api/telegram?action=qr");
   renderAccount(snap);
+  startQrPoll();
 };
 
 document.getElementById("btn-password").onclick = async () => {
@@ -214,6 +234,27 @@ document.getElementById("btn-chats").onclick = async () => {
     const opt = document.createElement("option");
     opt.textContent = data.error || "No groups yet — scan the QR first";
     sel.appendChild(opt);
+  }
+};
+
+document.getElementById("btn-scan").onclick = async () => {
+  const hint = document.getElementById("inbox-hint");
+  hint.textContent = "Reading today's group messages…";
+  try {
+    const data = await get("/api/telegram?action=scan");
+    if (data.account) renderAccount(data.account);
+    await refreshInbox();
+    const kept = (data.signals || []).filter((s) => s.still_good);
+    hint.textContent = data.ok
+      ? `Scanned ${data.scanned} setups today. ${data.kept} still good to enter. ${data.skipped || 0} non-signals skipped.`
+      : (data.error || "scan failed");
+    if (kept[0]) {
+      selectedId = kept[0].id;
+      rawEl.value = kept[0].raw;
+      loadRecommend(kept[0].raw);
+    }
+  } catch (err) {
+    hint.textContent = err.message;
   }
 };
 

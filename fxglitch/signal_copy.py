@@ -20,6 +20,10 @@ class SignalDirection(str, Enum):
 
 
 _SYMBOL = re.compile(r"\b([A-Za-z0-9]{2,30})\s*/?\s*USDT\b", re.I)
+_KNOWN = re.compile(
+    r"\b(XAUUSD|XAGUSD|EURUSD|GBPUSD|USDJPY|USDCAD|AUDUSD|NZDUSD|BTCUSD|ETHUSD)\b",
+    re.I,
+)
 _PRICE = r"\$?([0-9]+(?:\.[0-9]+)?)"
 _TP = re.compile(r"\b(?:tp|take\s*profit)\s*[:=-]?\s*" + _PRICE, re.I)
 _TP_SLOT = re.compile(r"\b(?:tp|take\s*profit)([1-5])\s*[:=-]?\s*" + _PRICE, re.I)
@@ -70,11 +74,15 @@ def parse_signal(message: str) -> ExternalSignal:
     """Parse the common Bitunix signal format without guessing missing data."""
     text = message.strip()
     symbol_match = _SYMBOL.search(text)
-    symbol = f"{symbol_match.group(1).upper()}USDT" if symbol_match else None
+    if symbol_match:
+        symbol = f"{symbol_match.group(1).upper()}USDT"
+    else:
+        known = _KNOWN.search(text)
+        symbol = known.group(1).upper() if known else None
 
     lower = text.lower()
     has_long = bool(re.search(r"\b(?:long|buy)\b", lower))
-    has_short = bool(re.search(r"\bshort\b", lower))
+    has_short = bool(re.search(r"\b(?:short|sell)\b", lower))
     direction = None
     warnings: list[str] = []
     if has_long and has_short:
