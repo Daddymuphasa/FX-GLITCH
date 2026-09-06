@@ -1,0 +1,24 @@
+{
+  "updated": "2026-09-06T09:02:17Z",
+  "signals": [
+    {
+      "id": "-1002004401199:21566",
+      "telegram_id": "-1002004401199:21566",
+      "source": "telegram",
+      "chat": "Cosmas trading/forex signals. (-1002004401199)",
+      "raw": "Pippin/usdt\nLong position \nEntry CMP \nTp 0.8\nSl 0.01300\nLeverage 7x \n\nNight \ud83d\ude34 research let's go \n\nTrade all with Bitunix \n\nhttps://www.bitunix.com/register?vipCode=Uwqq",
+      "received_at": "2026-09-06T00:23:19Z",
+      "posted_at": "2026-09-06T00:23:19Z",
+      "bitunix_symbol": "PIPPINUSDT",
+      "binance_symbol": "PIPPINUSDT",
+      "direction": "LONG",
+      "warnings": [],
+      "listed": false,
+      "tradeable": false,
+      "still_good": true,
+      "still_good_reason": "mark still between SL and TP; live R:R 1:113.56",
+      "mark": 0.01987,
+      "live_rr": 113.55604075691413
+    }
+  ]
+}

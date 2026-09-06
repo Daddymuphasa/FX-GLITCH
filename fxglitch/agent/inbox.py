@@ -58,9 +58,45 @@ DEMO = {
 }
 
 
+LIVE_PATH = ROOT / "public" / "live-signals.json"
+
+
+def _load_live() -> list[dict]:
+    try:
+        if LIVE_PATH.exists():
+            payload = json.loads(LIVE_PATH.read_text(encoding="utf-8"))
+            rows = payload.get("signals") if isinstance(payload, dict) else payload
+            if isinstance(rows, list):
+                return rows
+    except (OSError, json.JSONDecodeError):
+        pass
+    return []
+
+
+def publish_live() -> list[dict]:
+    good = [row for row in _load() if row.get("still_good") is True][:20]
+    try:
+        LIVE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        LIVE_PATH.write_text(
+            json.dumps({"updated": _now(), "signals": good}, indent=2),
+            encoding="utf-8",
+        )
+    except OSError:
+        pass
+    return good
+
+
 def list_signals() -> list[dict]:
     rows = _load()[:MAX]
-    return rows if rows else [DEMO]
+    if not rows:
+        rows = _load_live() or [DEMO]
+
+    def _key(row: dict) -> tuple:
+        good = 0 if row.get("still_good") is True else 1
+        stamp = str(row.get("posted_at") or row.get("received_at") or "")
+        return (good, stamp)
+
+    return sorted(rows, key=_key)
 
 
 def ingest(message: str, *, source: str = "paste", telegram_id: str | None = None,

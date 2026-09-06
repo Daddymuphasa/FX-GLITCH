@@ -41,24 +41,47 @@ async function post(url, body) {
   return data;
 }
 
+function uniqueSignals(signals) {
+  const seen = new Set();
+  const out = [];
+  (signals || []).forEach((s) => {
+    const key = [s.binance_symbol || s.bitunix_symbol, s.direction, s.raw].join("|");
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(s);
+  });
+  out.sort((a, b) => Number(b.still_good === true) - Number(a.still_good === true));
+  return isAdmin ? out : out.filter((s) => s.still_good !== false);
+}
+
 function renderInbox(signals) {
+  const rows = uniqueSignals(signals);
   inboxEl.innerHTML = "";
-  signals.forEach((s) => {
+  if (!rows.length) {
+    inboxEl.innerHTML = "<p class='hint'>No open setups yet. When the desk is watching Telegram, still-valid trades show up here.</p>";
+    return rows;
+  }
+  rows.forEach((s) => {
     const div = document.createElement("div");
     div.className = "item" + (s.id === selectedId ? " active" : "");
     const tag = s.still_good === true
-      ? '<span class="tag">STILL GOOD</span>'
+      ? '<span class="tag">OPEN</span>'
       : (s.still_good === false ? '<span class="tag late">late</span>' : "");
     div.innerHTML = `<div>${s.direction || "?"} ${s.binance_symbol || s.bitunix_symbol || "unknown"}${tag}</div>
-      <div class="meta">${s.source} · ${s.chat || ""} · ${s.posted_at || s.received_at || ""}${s.still_good_reason ? " · " + s.still_good_reason : ""}</div>`;
+      <div class="meta">${s.still_good_reason || s.chat || s.source || ""}</div>`;
     div.onclick = () => {
       selectedId = s.id;
-      rawEl.value = s.raw;
+      if (rawEl) rawEl.value = s.raw;
       loadRecommend(s.raw);
       renderInbox(signals);
+      const target = document.querySelector(".analysis");
+      if (target && window.matchMedia("(max-width: 900px)").matches) {
+        target.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
     };
     inboxEl.appendChild(div);
   });
+  return rows;
 }
 
 function renderAnalysis(rec) {
@@ -162,11 +185,12 @@ function renderAccount(snap) {
   const status = document.getElementById("qr-status");
   const pwWrap = document.getElementById("pw-wrap");
   const pill = document.getElementById("tg-status");
-  const setup = document.getElementById("setup-tg");
   if (snap.qr) {
     box.innerHTML = `<img alt="Telegram login QR" src="${snap.qr}" />`;
   } else if (snap.qr_url) {
     box.textContent = snap.qr_url;
+  } else if (snap.status === "linked" || snap.status === "watching") {
+    box.textContent = "Already linked";
   } else {
     box.textContent = snap.error || "QR appears here";
   }
@@ -178,12 +202,10 @@ function renderAccount(snap) {
     status.textContent = `Linked as ${name}.${watch}`;
     pill.textContent = "telegram: linked";
     pill.classList.add("ok");
-    if (setup && snap.status === "watching") setup.open = false;
   } else if (snap.status === "need_api") {
     status.textContent = "Set TELEGRAM_API_ID and TELEGRAM_API_HASH from https://my.telegram.org then restart python serve.py.";
     pill.textContent = "telegram: need API id";
     pill.classList.add("warn");
-    if (setup) setup.open = true;
   } else if (snap.status === "need_library") {
     status.textContent = "Run: pip install telethon qrcode";
     pill.classList.add("warn");
@@ -195,13 +217,11 @@ function renderAccount(snap) {
     status.textContent = "This account has 2FA. Enter the password.";
     pwWrap.classList.remove("hidden");
     document.getElementById("btn-password").classList.remove("hidden");
-    if (setup) setup.open = true;
   } else if (snap.status === "need_scan") {
     const age = snap.qr_age != null ? ` This code is ${snap.qr_age}s old and refreshes every 20s.` : "";
     status.textContent = "Scan THIS code now (Telegram → Settings → Devices → Link Desktop Device)." + age + " Old codes say auth token expired.";
     pill.textContent = "telegram: scan QR";
     pill.classList.add("warn");
-    if (setup) setup.open = true;
     startQrPoll();
   } else {
     status.textContent = snap.error || ("Status: " + (snap.status || "idle"));
@@ -210,9 +230,18 @@ function renderAccount(snap) {
 
 async function refreshInbox() {
   const box = await get("/api/inbox");
-  renderInbox(box.signals || []);
+  let signals = box.signals || [];
+  const onlyDemo = signals.length === 1 && signals[0].id === "demo-kaito";
+  if (onlyDemo) {
+    try {
+      const live = await (await fetch("/live-signals.json")).json();
+      if (live.signals && live.signals.length) signals = live.signals;
+    } catch (_err) {}
+  }
+  box.signals = signals;
+  renderInbox(signals);
   if (box.account) renderAccount(box.account);
-  if (box.signals && box.signals.length && !currentRaw) setFlow(1);
+  if (signals.length && !currentRaw) setFlow(1);
   return box;
 }
 
@@ -286,12 +315,20 @@ async function boot() {
     try {
       fillChats(await get("/api/telegram?action=chats"));
     } catch (_err) {}
+    const hint = document.getElementById("inbox-hint");
+    if (hint) hint.textContent = "Loading today's trades from Telegram…";
+    try {
+      await scanToday();
+      box = await refreshInbox();
+    } catch (_err) {}
   }
-  if (box.signals && box.signals[0]) {
-    selectedId = box.signals[0].id;
-    if (rawEl) rawEl.value = box.signals[0].raw;
+  const rows = uniqueSignals(box.signals || []);
+  const pick = rows.find((s) => s.still_good === true) || rows[0];
+  if (pick) {
+    selectedId = pick.id;
+    if (rawEl) rawEl.value = pick.raw;
     renderInbox(box.signals);
-    loadRecommend(box.signals[0].raw);
+    loadRecommend(pick.raw);
   }
   setInterval(refreshInbox, 5000);
 }
@@ -345,24 +382,32 @@ document.getElementById("btn-chats").onclick = async () => {
   fillChats(data);
 };
 
-document.getElementById("btn-scan").onclick = async () => {
+async function scanToday() {
   const hint = document.getElementById("inbox-hint");
-  hint.textContent = "Reading today's group messages…";
-  try {
-    const data = await get("/api/telegram?action=scan");
-    if (data.account) renderAccount(data.account);
-    await refreshInbox();
-    const kept = (data.signals || []).filter((s) => s.still_good);
+  if (hint) hint.textContent = "Reading today's group messages…";
+  const data = await get("/api/telegram?action=scan");
+  if (data.account) renderAccount(data.account);
+  await refreshInbox();
+  const kept = (data.signals || []).filter((s) => s.still_good);
+  if (hint) {
     hint.textContent = data.ok
-      ? `Scanned ${data.scanned} setups today. ${data.kept} still good to enter. ${data.skipped || 0} non-signals skipped.`
+      ? `${data.kept} still good to enter from ${data.scanned} setups today.`
       : (data.error || "scan failed");
-    if (kept[0]) {
-      selectedId = kept[0].id;
-      rawEl.value = kept[0].raw;
-      loadRecommend(kept[0].raw);
-    }
+  }
+  if (kept[0]) {
+    selectedId = kept[0].id;
+    if (rawEl) rawEl.value = kept[0].raw;
+    loadRecommend(kept[0].raw);
+  }
+  return data;
+}
+
+document.getElementById("btn-scan").onclick = async () => {
+  try {
+    await scanToday();
   } catch (err) {
-    hint.textContent = err.message;
+    const hint = document.getElementById("inbox-hint");
+    if (hint) hint.textContent = err.message;
   }
 };
 

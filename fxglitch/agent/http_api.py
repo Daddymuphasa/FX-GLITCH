@@ -12,7 +12,7 @@ from urllib.parse import parse_qs, urlparse
 from ..live.guards import Limits
 from ..venues.binance import Binance
 from ..venues.base import OrderRequest, VenueError
-from .inbox import ingest, list_signals
+from .inbox import ingest, list_signals, publish_live
 from .mcp_server import TOOLS
 from .plans import plan_by_id, proposal_from_plan, recommend
 from .positioning import fetch_briefing
@@ -204,7 +204,7 @@ def dispatch(method: str, path: str, query: dict, body: dict):
             return _json(bridge.chats())
         if action == "scan":
             result = bridge.scan_today()
-            result["signals"] = [s for s in list_signals() if s.get("still_good")]
+            result["signals"] = publish_live()
             result["account"] = bridge.snapshot()
             return _json(result)
         return _json(bridge.snapshot())
@@ -280,6 +280,7 @@ class Handler(BaseHTTPRequestHandler):
         types = {".html": "text/html; charset=utf-8", ".css": "text/css",
                  ".js": "application/javascript", ".svg": "image/svg+xml",
                  ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png",
-                 ".webp": "image/webp", ".ico": "image/x-icon"}
+                 ".webp": "image/webp", ".ico": "image/x-icon",
+                 ".json": "application/json; charset=utf-8"}
         with open(full, "rb") as fh:
             self._send(200, types.get(ext, "application/octet-stream"), fh.read())

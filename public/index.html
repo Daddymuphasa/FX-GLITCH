@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>FX-GLITCH — Signal desk</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -33,48 +33,62 @@
           <h1>FX-GLITCH</h1>
         </div>
       </div>
-      <p class="lede">Pick a signal. We map the Binance pair. You choose a risk plan. Nothing is sent until you confirm.</p>
+      <p class="lede">Tap a trade. See the Binance pair. Pick how much risk you want. Nothing sends until you confirm.</p>
       <div class="pills">
-        <span class="pill" id="mode-pill">dry-run default</span>
+        <span class="pill" id="mode-pill">dry-run</span>
         <span class="pill admin-only" id="tg-status">telegram: not connected</span>
         <span class="pill admin-only" id="bn-status">binance: no keys</span>
       </div>
     </header>
 
-    <ol class="flow" id="flow">
-      <li class="step current" data-step="1"><span>01</span> Signals</li>
-      <li class="step" data-step="2"><span>02</span> Map pair</li>
-      <li class="step" data-step="3"><span>03</span> Pick risk</li>
-    </ol>
+    <section class="admin-desk admin-only" id="admin-desk">
+      <div class="panel-head">
+        <h2>Admin · scan Telegram here</h2>
+        <button id="btn-scan" type="button">Load today's trades</button>
+      </div>
+      <p id="qr-status" class="hint">This is the only place to add Telegram. Open Telegram → Settings → Devices → Link Desktop Device, then scan the QR. If last session already linked this PC, trades load by themselves.</p>
+      <div class="qr-row">
+        <div class="qr-box" id="qr-box">QR appears here</div>
+        <div>
+          <label class="hidden" id="pw-wrap">2FA password <input id="tg-password" type="password" /></label>
+          <div class="row-actions">
+            <button id="btn-qr" class="primary" type="button">Show QR</button>
+            <button id="btn-password" class="hidden" type="button">Submit 2FA</button>
+            <button id="btn-chats" type="button">Load my groups</button>
+          </div>
+          <select id="chat-list"></select>
+          <button id="btn-watch" type="button">Watch this group</button>
+        </div>
+      </div>
+    </section>
 
     <section class="desk">
       <article class="inbox">
         <div class="panel-head">
-          <h2>Recommendations</h2>
-          <button id="btn-scan" class="admin-only" type="button">Scan today</button>
+          <h2>Open trades</h2>
         </div>
-        <p class="hint" id="inbox-hint">Select a setup. The Binance pair and four risk plans appear on the right.</p>
+        <p class="hint" id="inbox-hint">Still-valid setups from the desk. Tap one.</p>
         <div id="inbox"></div>
+        <label class="equity-row">Your balance (USDT)
+          <input id="equity" type="number" inputmode="decimal" value="1000" min="10" step="10" />
+        </label>
         <div class="admin-only">
-          <textarea id="raw" rows="6" placeholder="Paste a Bitunix group signal&#10;KAITO/USDT&#10;Long position&#10;Entry CMP&#10;Tp 1.5&#10;Sl 0.2500&#10;Leverage 10x"></textarea>
-          <div class="row-actions">
-            <label>Equity USDT <input id="equity" type="number" value="1000" min="10" step="10" /></label>
-            <button id="btn-ingest" class="primary" type="button">Analyse on Binance</button>
-          </div>
+          <textarea id="raw" rows="5" placeholder="Paste a Bitunix group signal"></textarea>
+          <button id="btn-ingest" class="primary" type="button">Analyse on Binance</button>
         </div>
       </article>
 
       <article class="analysis">
-        <h2>Analysis</h2>
-        <div id="analysis" class="hint">Select a recommendation. The pair, stop, and four plans appear here.</div>
+        <h2>This trade</h2>
+        <div id="analysis" class="hint">Tap an open trade to see the pair, stop, and four plans.</div>
       </article>
     </section>
 
     <section class="plans-wrap">
       <div class="panel-head">
         <div>
-          <h2>Risk plans</h2>
-          <p class="hint" id="live-hint">Same stop as the signal. Size, leverage and take-profit change with the plan. Win/loss is this setup’s TP vs SL — not a historical win rate.</p>
+          <h2>Pick a risk</h2>
+          <p class="hint" id="live-hint">Same stop. Size and take-profit change with the plan. Swipe on a phone.</p>
         </div>
         <label id="live-label" class="toggle admin-only">
           <input id="send-live" type="checkbox" />
@@ -84,33 +98,6 @@
       <div id="plans" class="plans"></div>
       <p id="execute-msg" class="hint banner"></p>
     </section>
-
-    <details class="setup admin-only" id="setup-tg">
-      <summary>
-        <span>Link Telegram</span>
-        <em>QR on this PC only — Vercel cannot keep the session</em>
-      </summary>
-      <div class="qr-row">
-        <div class="qr-box" id="qr-box">QR appears here</div>
-        <div>
-          <p id="qr-status" class="hint">Not linked.</p>
-          <label class="hidden" id="pw-wrap">2FA password <input id="tg-password" type="password" /></label>
-          <div class="row-actions">
-            <button id="btn-qr" class="primary" type="button">Show QR</button>
-            <button id="btn-password" class="hidden" type="button">Submit 2FA</button>
-            <button id="btn-chats" type="button">Load my groups</button>
-          </div>
-          <select id="chat-list"></select>
-          <button id="btn-watch" type="button">Watch this group</button>
-          <ol class="steps">
-            <li>Get <code>TELEGRAM_API_ID</code> + <code>TELEGRAM_API_HASH</code> from <code>https://my.telegram.org</code> (API development tools). Put them in <code>.env</code>.</li>
-            <li>Run <code>python serve.py</code>, open this desk, click <strong>Show QR</strong>.</li>
-            <li>Phone: Telegram → Settings → Devices → Link Desktop Device. Scan with the account already in the Bitunix group.</li>
-            <li><strong>Load my groups</strong>, pick the futures group, then <strong>Watch this group</strong>.</li>
-          </ol>
-        </div>
-      </div>
-    </details>
   </main>
   <script src="/app.js"></script>
 </body>
