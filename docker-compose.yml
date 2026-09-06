@@ -1,0 +1,32 @@
+services:
+  desk:
+    build: .
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      FXGLITCH_VPS: "1"
+      FXGLITCH_HOST: "0.0.0.0"
+      FXGLITCH_PORT: "8765"
+    volumes:
+      - ./data:/app/data
+      - ./.env:/app/.env:ro
+    expose:
+      - "8765"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - desk
+
+volumes:
+  caddy_data:
+  caddy_config:

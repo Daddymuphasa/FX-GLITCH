@@ -59,24 +59,28 @@ def _port_open(host: str, port: int) -> bool:
 
 def main() -> None:
     p = argparse.ArgumentParser(description="FX-GLITCH Agent OS dashboard")
-    p.add_argument("--host", default="127.0.0.1")
-    p.add_argument("--port", type=int, default=8765)
+    p.add_argument("--host", default=os.environ.get("FXGLITCH_HOST", "127.0.0.1"))
+    p.add_argument("--port", type=int, default=int(os.environ.get("PORT") or os.environ.get("FXGLITCH_PORT") or 8765))
     p.add_argument("--open", action="store_true", help="open the desk in a browser")
     p.add_argument("--no-open", action="store_true", help="do not open a browser")
     args = p.parse_args()
-    want_open = args.open or not args.no_open
-    url = f"http://{args.host}:{args.port}"
-
     _ensure_deps()
     _load_env(os.path.join(ROOT, ".env"))
-    os.environ.setdefault("FXGLITCH_INBOX_WEBHOOK", "https://fxglitch.xyz/api/telegram")
+    vps = bool(os.environ.get("FXGLITCH_VPS"))
+    want_open = False if (vps or args.no_open or args.host in ("0.0.0.0", "::")) else True
+    if args.open:
+        want_open = True
+    public_host = "127.0.0.1" if args.host in ("0.0.0.0", "::") else args.host
+    url = f"http://{public_host}:{args.port}"
+    if not vps:
+        os.environ.setdefault("FXGLITCH_INBOX_WEBHOOK", "https://fxglitch.xyz/api/telegram")
 
     from http.server import ThreadingHTTPServer
 
     from fxglitch.agent.http_api import Handler
     from fxglitch.agent.telegram_user import bridge
 
-    if _port_open(args.host, args.port):
+    if _port_open("127.0.0.1", args.port) or (args.host not in ("0.0.0.0", "::") and _port_open(args.host, args.port)):
         print(f"FX-GLITCH already running at {url}")
         if want_open:
             webbrowser.open(url)

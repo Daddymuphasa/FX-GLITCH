@@ -27,6 +27,8 @@ python serve.py --open   # local: http://127.0.0.1:8765
 python -m fxglitch.agent.mcp_server
 ```
 
+24/7 Telegram + desk: Ubuntu VPS with Docker. Steps: [docs/VPS.md](docs/VPS.md).
+
 Pair with the official Binance MCP:
 
 ```

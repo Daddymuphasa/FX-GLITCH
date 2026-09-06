@@ -1,0 +1,3 @@
+fxglitch.xyz, www.fxglitch.xyz {
+	reverse_proxy desk:8765
+}
