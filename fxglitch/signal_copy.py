@@ -22,6 +22,7 @@ class SignalDirection(str, Enum):
 _SYMBOL = re.compile(r"\b([A-Za-z0-9]{2,30})\s*/?\s*USDT\b", re.I)
 _PRICE = r"\$?([0-9]+(?:\.[0-9]+)?)"
 _TP = re.compile(r"\b(?:tp|take\s*profit)\s*[:=-]?\s*" + _PRICE, re.I)
+_TP_SLOT = re.compile(r"\b(?:tp|take\s*profit)([1-5])\s*[:=-]?\s*" + _PRICE, re.I)
 _SL = re.compile(r"\b(?:sl|stop\s*loss)\s*[:=-]?\s*" + _PRICE, re.I)
 _LEV = re.compile(r"\b(?:leverage|lev)\s*[:=-]?\s*([0-9]+(?:\.[0-9]+)?)\s*x?\b", re.I)
 
@@ -48,6 +49,7 @@ class ExternalSignal:
     take_profit: Decimal | None
     stop_loss: Decimal | None
     leverage: Decimal | None
+    take_profits: tuple[Decimal, ...] = ()
     stop_adjustment: bool = False
     notes: tuple[str, ...] = ()
     warnings: tuple[str, ...] = ()
@@ -95,6 +97,18 @@ def parse_signal(message: str) -> ExternalSignal:
         warnings.append("stop-loss is missing")
 
     take_profit = _decimal(_TP.search(text))
+    tps: list[Decimal] = []
+    for match in _TP_SLOT.finditer(text):
+        try:
+            value = Decimal(match.group(2))
+        except InvalidOperation:
+            continue
+        if value > 0 and value not in tps:
+            tps.append(value)
+    if take_profit is not None and take_profit not in tps:
+        tps.insert(0, take_profit)
+    elif take_profit is None and tps:
+        take_profit = tps[0]
     lev = _decimal(_LEV.search(text))
     stop_adjustment = bool(re.search(r"\badjust\s+(?:your\s+)?sl\b", lower))
     notes = tuple(word for word in ("scalping", "whale", "holding tight")
@@ -112,6 +126,7 @@ def parse_signal(message: str) -> ExternalSignal:
         entry=entry,
         entry_is_market=market_entry,
         take_profit=take_profit,
+        take_profits=tuple(tps),
         stop_loss=stop_loss,
         leverage=lev,
         stop_adjustment=stop_adjustment,

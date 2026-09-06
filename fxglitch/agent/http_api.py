@@ -4,13 +4,20 @@ from __future__ import annotations
 
 import json
 import os
+from datetime import datetime, timezone
+from decimal import Decimal
 from http.server import BaseHTTPRequestHandler
 from urllib.parse import parse_qs, urlparse
 
+from ..live.guards import Limits
 from ..venues.binance import Binance
+from ..venues.base import OrderRequest
+from .inbox import ingest, list_signals
 from .mcp_server import TOOLS
+from .plans import plan_by_id, proposal_from_plan, recommend
 from .positioning import fetch_briefing
-from .session import from_signal, judge_demo, run_cycle
+from .session import from_signal, judge_demo, paper_balance, run_cycle
+from .telegram_in import ingest_update
 
 HACKATHON = {
     "event": "Binance Agent OS Mini Hackathon",
@@ -43,6 +50,40 @@ HACKATHON = {
 def _json(payload, status=200):
     body = json.dumps(payload, default=str).encode()
     return status, "application/json; charset=utf-8", body
+
+
+def _context(symbol: str | None):
+    instruments = None
+    mark = None
+    balance = None
+    try:
+        venue = Binance()
+        instruments = venue.instruments()
+        if symbol and symbol in instruments:
+            rows = venue._request("GET", "/fapi/v1/premiumIndex", query={"symbol": symbol})
+            mark = float(rows.get("markPrice") or 0) or None
+        if venue.authenticated:
+            balance = venue.balance()
+    except Exception:
+        pass
+    return instruments, mark, balance
+
+
+def _recommend_body(body: dict):
+    message = (body.get("message") or "").strip()
+    if not message:
+        return _json({"error": "message is required"}, 400)
+    equity = float(body.get("equity") or 1000)
+    instruments, mark, balance = _context(None)
+    parsed_symbol = None
+    rec_once = recommend(message, equity=equity, mark=mark, instruments=instruments,
+                         balance=balance)
+    parsed_symbol = rec_once.binance_symbol
+    if parsed_symbol and mark is None:
+        instruments, mark, balance = _context(parsed_symbol)
+        rec_once = recommend(message, equity=(balance.equity if balance else equity),
+                             mark=mark, instruments=instruments, balance=balance)
+    return _json(rec_once.to_dict())
 
 
 def dispatch(method: str, path: str, query: dict, body: dict):
@@ -78,8 +119,64 @@ def dispatch(method: str, path: str, query: dict, body: dict):
         message = body.get("message") or ""
         proposal = from_signal(message)
         return _json(proposal.to_dict())
+    if path == "/api/inbox" and method == "GET":
+        return _json({"signals": list_signals(),
+                      "telegram": bool(os.environ.get("TELEGRAM_BOT_TOKEN"))})
+    if path == "/api/inbox" and method == "POST":
+        try:
+            item = ingest(body.get("message") or "", source=body.get("source") or "paste")
+        except ValueError as exc:
+            return _json({"error": str(exc)}, 400)
+        return _json(item)
+    if path == "/api/recommend" and method == "POST":
+        return _recommend_body(body)
+    if path == "/api/execute" and method == "POST":
+        message = (body.get("message") or "").strip()
+        plan_id = body.get("plan") or "mid"
+        if not message:
+            return _json({"error": "message is required"}, 400)
+        equity = float(body.get("equity") or 1000)
+        instruments, mark, balance = _context(None)
+        rec = recommend(message, equity=equity, mark=mark, instruments=instruments, balance=balance)
+        if rec.binance_symbol and mark is None:
+            instruments, mark, balance = _context(rec.binance_symbol)
+            rec = recommend(message, equity=(balance.equity if balance else equity),
+                            mark=mark, instruments=instruments, balance=balance)
+        plan = plan_by_id(rec, plan_id)
+        if plan is None:
+            return _json({"error": f"unknown plan {plan_id}"}, 400)
+        if not plan["policy_ok"]:
+            return _json({"error": plan["policy_reason"], "recommendation": rec.to_dict()}, 400)
+        proposal = proposal_from_plan(rec, plan)
+        live = bool(body.get("live")) and bool(body.get("confirm")) and not os.environ.get("VERCEL")
+        venue = Binance() if live else None
+        if live and venue is not None and getattr(venue, "authenticated", False):
+            qty = Decimal(str(plan["qty"]))
+            result = venue.place(OrderRequest(
+                symbol=proposal.symbol,
+                direction=1 if proposal.direction == "LONG" else -1,
+                qty=qty,
+                stop_price=Decimal(str(plan["stop"])),
+                take_profit=Decimal(str(plan["take_profit"])),
+                client_id=f"fxg-{proposal.symbol}-{int(datetime.now(timezone.utc).timestamp())}",
+                reason=proposal.reason,
+            ))
+            return _json({"sent": bool(result.accepted), "dry_run": False,
+                          "order": {"id": result.venue_order_id, "message": result.message},
+                          "plan": plan, "recommendation": rec.to_dict()})
+        return _json({"sent": False, "dry_run": True, "plan": plan,
+                      "proposal": proposal.to_dict(), "recommendation": rec.to_dict()})
+    if path == "/api/telegram" and method == "POST":
+        item = ingest_update(body if "message" in body or "channel_post" in body
+                             else {"message": {"text": body.get("text") or body.get("message"),
+                                               "message_id": body.get("update_id", 0),
+                                               "chat": {"id": "manual"}}})
+        if item is None and body.get("message") and not isinstance(body.get("message"), dict):
+            item = ingest(str(body.get("message")), source="telegram")
+        return _json({"ok": True, "item": item})
     if path not in ("/api/health", "/api/hackathon", "/api/tools", "/api/demo",
-                    "/api/briefing", "/api/cycle", "/api/signal"):
+                    "/api/briefing", "/api/cycle", "/api/signal", "/api/inbox",
+                    "/api/recommend", "/api/execute", "/api/telegram"):
         return _json({"error": "not found"}, 404)
     return _json({"error": "method not allowed"}, 405)
 

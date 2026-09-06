@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>FX-GLITCH — Binance Agent OS</title>
+  <title>FX-GLITCH — Signal desk</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -13,62 +13,49 @@
   <div class="frame">
     <header>
       <div>
-        <p class="eyebrow">Binance Agent OS Mini Hackathon · Track B</p>
-        <h1>FX-GLITCH</h1>
-        <p class="lede">The MCP that sits between an AI agent and a Binance futures order. Positioning describes the crowd. Policy says yes or no. Chart TA is not in this path.</p>
+        <p class="eyebrow">Bitunix Telegram → Binance USDⓈ-M</p>
+        <h1>FX-GLITCH desk</h1>
+        <p class="lede">The group posts a Bitunix futures signal. The agent maps the pair on Binance, then you pick a risk plan. Nothing is sent until you confirm.</p>
       </div>
       <div class="pills">
         <span class="pill">dry-run default</span>
-        <span class="pill">USDⓈ-M</span>
-        <span class="pill">MCP stdio</span>
+        <span class="pill" id="tg-status">telegram: not connected</span>
       </div>
     </header>
 
-    <nav class="actions">
-      <button id="btn-demo" class="primary">Run 60-second judge demo</button>
-      <button id="btn-live">Live BTC briefing</button>
-      <button id="btn-cycle">Cycle BTC (dry-run)</button>
-    </nav>
-
-    <section class="grid">
-      <article>
-        <h2>Positioning</h2>
-        <p class="hint">Funding, open interest, long/short — public Binance data. Not RSI. Not EMA.</p>
-        <pre id="briefing">Press a button.</pre>
+    <section class="desk">
+      <article class="inbox">
+        <h2>Group signals</h2>
+        <p class="hint">From the Telegram listener, a webhook, or paste.</p>
+        <div id="inbox"></div>
+        <textarea id="raw" rows="7" placeholder="Paste a Bitunix group signal&#10;KAITO/USDT&#10;Long position&#10;Entry CMP&#10;Tp 1.5&#10;Sl 0.2500&#10;Leverage 10x"></textarea>
+        <div class="row-actions">
+          <label>Equity USDT <input id="equity" type="number" value="1000" min="10" step="10" /></label>
+          <button id="btn-ingest" class="primary">Analyse on Binance</button>
+        </div>
       </article>
-      <article>
-        <h2>Proposal → policy</h2>
-        <p class="hint">Guards refuse. They never silently resize.</p>
-        <pre id="policy">—</pre>
-      </article>
-    </section>
 
-    <section class="cases" id="cases" hidden>
-      <h2>Judge demo</h2>
-      <div id="case-list"></div>
-    </section>
-
-    <section class="row">
-      <article>
-        <h2>Paste a signal</h2>
-        <textarea id="signal" rows="6" placeholder="BTCUSDT&#10;Long position&#10;Entry CMP&#10;Tp 120000&#10;Sl 105000&#10;Leverage 5x"></textarea>
-        <button id="btn-signal">Parse + cycle</button>
-      </article>
-      <article>
-        <h2>Connect the MCPs</h2>
-        <pre class="connect"># Your policy MCP (this repo)
-claude mcp add fx-glitch -- python -m fxglitch.agent.mcp_server
-
-# Official Binance Agent OS MCP
-claude mcp add binance-mcp-server --transport http https://agent.binance.com/mcp/agentic</pre>
-        <p class="hint">Track B is “connect your MCPs and trade.” Pair both. This one is the layer that can say no. Official endpoint documented at developers.binance.com Agent Native → MCP Server.</p>
+      <article class="analysis">
+        <h2>Analysis</h2>
+        <div id="analysis" class="hint">Select a signal or paste one.</div>
       </article>
     </section>
 
     <section>
-      <h2>Published entry steps (you still have to do these)</h2>
-      <ol id="steps" class="steps"></ol>
-      <p class="hint">Deadline 8 Sep 2026 23:59 UTC. Survey: binance.com/en/survey/2913aa200aac462c89a737779393f3d4. Restricted jurisdictions include US, UK, EEA, Hong Kong, Singapore, and Binance’s prohibited list. We did not invent a judging rubric — Binance did not publish one.</p>
+      <h2>Risk plans</h2>
+      <p class="hint">Same stop as the signal. Size, leverage and take-profit change with the plan. Win/loss is this setup’s TP vs SL — not a historical win rate.</p>
+      <div id="plans" class="plans"></div>
+      <p id="execute-msg" class="hint"></p>
+    </section>
+
+    <section class="connect">
+      <h2>Connect the Bitunix Telegram group</h2>
+      <ol class="steps">
+        <li>Create a bot with <code>@BotFather</code>. Copy the token into <code>TELEGRAM_BOT_TOKEN</code>.</li>
+        <li>Turn privacy off: <code>/setprivacy</code> → Disable. Add the bot to the Bitunix futures group.</li>
+        <li>Run <code>python tools/telegram_listen.py --discover</code>, copy the group <code>chat_id</code> into <code>TELEGRAM_CHAT_ID</code>.</li>
+        <li>Leave <code>python tools/telegram_listen.py</code> running. New signals land in this inbox.</li>
+      </ol>
     </section>
   </div>
   <script src="/app.js"></script>

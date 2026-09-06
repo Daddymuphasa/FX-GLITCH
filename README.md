@@ -12,6 +12,13 @@ An agent may *propose*. FX-GLITCH decides whether the trade is allowed.
 
 Live demo (Vercel): **https://fx-glitch.vercel.app**
 
+The desk reads a Bitunix Telegram futures signal, maps the USDT-M pair on Binance, and offers four risk plans (Daredevil / High / Mid / Low). Stop stays the group’s invalidation. Size, leverage and TP change with the plan. Win/loss is that setup’s R-multiple, not a made-up win rate.
+
+```
+python tools/telegram_listen.py --discover
+python tools/telegram_listen.py
+```
+
 ```
 python agent.py --demo
 python serve.py          # local: http://127.0.0.1:8765

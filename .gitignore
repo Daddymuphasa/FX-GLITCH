@@ -25,3 +25,6 @@ desktop.ini
 # local candle history - re-fetchable, and large
 data/candles/
 data/live_state.json
+data/inbox.json
+
+.vercel
