@@ -32,7 +32,7 @@
           <h1>FX-GLITCH</h1>
         </div>
       </div>
-      <button id="btn-keys" type="button">Connect Binance</button>
+      <button id="btn-keys" class="admin-only" type="button">Live Binance keys</button>
     </header>
 
     <section class="glass admin-desk admin-only" id="admin-desk">
@@ -71,6 +71,12 @@
       <div id="analysis" class="hint">Nothing selected yet.</div>
       <div id="plans" class="risk-picks"></div>
       <p id="execute-msg" class="hint banner"></p>
+    </section>
+
+    <section class="glass book">
+      <h2>Your trades</h2>
+      <p class="hint">Taken on this device. No Binance API needed.</p>
+      <div id="book"></div>
     </section>
   </main>
 

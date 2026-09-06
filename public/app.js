@@ -6,6 +6,7 @@ const rawEl = document.getElementById("raw");
 const equityEl = document.getElementById("equity");
 const takeBtn = document.getElementById("btn-take");
 const keysDlg = document.getElementById("keys-dialog");
+const bookEl = document.getElementById("book");
 
 let currentRaw = "";
 let selectedId = "";
@@ -13,6 +14,7 @@ let selectedPlan = "mid";
 let currentRec = null;
 const isAdmin = document.documentElement.classList.contains("is-admin");
 const KEYS = "fxg.binance";
+const BOOK = "fxg.book";
 
 function money(n) {
   const v = Number(n) || 0;
@@ -30,6 +32,37 @@ function userKeys() {
 function hasUserKeys() {
   const k = userKeys();
   return !!(k.api_key && k.secret);
+}
+
+function loadBook() {
+  try {
+    const rows = JSON.parse(localStorage.getItem(BOOK) || "[]");
+    return Array.isArray(rows) ? rows : [];
+  } catch (_err) {
+    return [];
+  }
+}
+
+function saveFill(fill) {
+  const rows = loadBook();
+  rows.unshift(fill);
+  localStorage.setItem(BOOK, JSON.stringify(rows.slice(0, 40)));
+  renderBook();
+}
+
+function renderBook() {
+  if (!bookEl) return;
+  const rows = loadBook();
+  if (!rows.length) {
+    bookEl.innerHTML = "<p class='hint'>No tickets yet. Take a setup and it lands here.</p>";
+    return;
+  }
+  bookEl.innerHTML = rows.map((t) => `
+    <div class="item">
+      <div class="pair">${t.direction || ""} ${t.symbol || ""} <span class="tag">${t.plan || ""}</span></div>
+      <div class="meta">${t.leverage || ""}x · SL ${t.stop} · TP ${t.take_profit} · ${t.at || ""}</div>
+    </div>
+  `).join("");
 }
 
 function setFlow(_n) {}
@@ -137,9 +170,7 @@ function renderPlans(rec) {
   });
   const chosen = plans.find((p) => p.id === selectedPlan);
   takeBtn.disabled = !chosen || !chosen.policy_ok;
-  takeBtn.textContent = chosen
-    ? (hasUserKeys() && document.getElementById("send-live").checked ? "Send " + chosen.label : "Take " + chosen.label)
-    : "Take trade";
+  takeBtn.textContent = chosen ? "Take " + chosen.label : "Take trade";
 }
 
 async function loadRecommend(message) {
@@ -157,20 +188,10 @@ async function loadRecommend(message) {
 }
 
 async function execute(message, plan, details) {
-  const keys = userKeys();
   const sendBox = document.getElementById("send-live");
-  const wantLive = !!(sendBox && sendBox.checked && keys.api_key);
-  if (wantLive) {
-    const ok = window.confirm(
-      "Send this to YOUR Binance futures account?\n\n" +
-      (details ? `${details.label}: ${details.leverage}x\nSL ${details.stop}  TP ${details.take_profit}\n` : "")
-    );
-    if (!ok) {
-      msgEl.textContent = "Cancelled.";
-      return;
-    }
-  }
-  msgEl.textContent = wantLive ? "Sending…" : "Building ticket…";
+  const keys = isAdmin ? userKeys() : {};
+  const wantLive = !!(isAdmin && sendBox && sendBox.checked && keys.api_key);
+  msgEl.textContent = "Taking…";
   try {
     const data = await post("/api/execute", {
       message,
@@ -178,13 +199,21 @@ async function execute(message, plan, details) {
       equity: Number(equityEl.value) || 1000,
       confirm: true,
       live: wantLive,
-      api_key: keys.api_key || "",
-      secret: keys.secret || "",
+      api_key: wantLive ? (keys.api_key || "") : "",
+      secret: wantLive ? (keys.secret || "") : "",
     });
     const p = data.plan;
-    msgEl.textContent = data.dry_run
-      ? `${p.label} ready: ${p.leverage}x ${data.recommendation && data.recommendation.binance_symbol}. SL ${p.stop} TP ${p.take_profit}. Not sent.`
-      : `Sent ${p.label}. Order ${data.order && data.order.id}`;
+    const rec = data.recommendation || {};
+    saveFill({
+      direction: rec.direction,
+      symbol: rec.binance_symbol,
+      plan: p.label,
+      leverage: p.leverage,
+      stop: p.stop,
+      take_profit: p.take_profit,
+      at: new Date().toISOString().slice(11, 16) + " UTC",
+    });
+    msgEl.textContent = `${p.label} taken on your desk. ${p.leverage}x ${rec.binance_symbol || ""}. SL ${p.stop} TP ${p.take_profit}.`;
   } catch (err) {
     msgEl.textContent = err.message;
   }
@@ -289,6 +318,7 @@ function paintKeysButton() {
 }
 
 async function boot() {
+  renderBook();
   paintKeysButton();
   const savedEq = userKeys().equity;
   if (savedEq) equityEl.value = savedEq;

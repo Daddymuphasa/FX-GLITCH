@@ -198,7 +198,7 @@ def dispatch(method: str, path: str, query: dict, body: dict):
                           "plan": plan, "recommendation": rec.to_dict()})
         return _json({"sent": False, "dry_run": True, "plan": plan,
                       "proposal": proposal.to_dict(), "recommendation": rec.to_dict(),
-                      "hint": "Connect Binance on this device to send. This tap was a dry-run."})
+                      "hint": "On your desk. Not sent to Binance."})
     if path == "/api/signals" and method == "GET":
         return _json({"signals": list_signals()})
     if path == "/api/signals" and method == "POST":
