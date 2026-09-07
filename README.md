@@ -1,69 +1,64 @@
 # FX-GLITCH
 
-**Binance Agent OS Mini Hackathon · Track B (MCP + trade)**  
-The MCP that sits between an AI agent and a Binance USDⓈ-M order.
+**The agent may propose. This layer decides if the trade is allowed.**
 
-An agent may *propose*. FX-GLITCH decides whether the trade is allowed.
+Policy MCP for Binance USDⓈ-M futures. Built for the [Binance Agent OS Mini Hackathon](https://www.binance.com/en/blog/community/8802181509900814931) · **Track A**.
 
-- **Positioning** (funding, open interest, long/short) describes the crowd.
-- **Policy** refuses missing stops, excess leverage, daily-loss breaches, and alt baskets that are one BTC bet.
-- **Execution** is dry-run unless you pass `--live` and set API keys.
-- **Chart TA is not in this path.** Donchian / EMA / squeeze files remain in `strategies/` as a research archive. The live product does not call them.
-
-Live demo: **https://fxglitch.xyz** (Vercel: https://fx-glitch.vercel.app)
-
-The desk reads a Bitunix Telegram futures signal, maps the USDT-M pair on Binance, and offers four risk plans (Daredevil / High / Mid / Low). Stop stays the group’s invalidation. Size, leverage and TP change with the plan. Win/loss is that setup’s R-multiple, not a made-up win rate.
-
-```
-python tools/telegram_listen.py --discover
-python tools/telegram_listen.py
-```
-
-To watch a group you already joined: set `TELEGRAM_API_ID` / `TELEGRAM_API_HASH` from https://my.telegram.org, run `start-desk.bat` (or `python serve.py --open`), click **Show QR**, scan with Telegram (Settings → Devices → Link Desktop Device), pick the Bitunix group. QR login is local-only — Vercel cannot keep the Telegram session.
-
-```
-python agent.py --demo
-python serve.py --open   # local: http://127.0.0.1:8765
-python -m fxglitch.agent.mcp_server
-```
-
-24/7 Telegram + desk: Ubuntu VPS with Docker. Steps: [docs/VPS.md](docs/VPS.md).
-
-Pair with the official Binance MCP:
-
-```
-claude mcp add fx-glitch -- python -m fxglitch.agent.mcp_server
-claude mcp add binance-mcp-server --transport http https://agent.binance.com/mcp/agentic
-```
-
-Submission notes, published rules, and the X reply draft: [docs/HACKATHON.md](docs/HACKATHON.md).
+Binance’s MCP can place the order. FX-GLITCH answers a different question: **should it?**
 
 ---
 
-## Why this exists
+## What it does
 
-Binance Agent OS already lets an agent trade through `https://agent.binance.com/mcp/agentic` (Spot / Margin / Convert / USDⓈ-M / COIN-M inside an Agentic sub-account). That MCP does not know when the book is crowded, when twenty alt longs are one BTC bet, or when a proposed order has no stop.
+| Layer | Job |
+|---|---|
+| **Positioning** | Reads the crowd from public Binance data — funding, open interest, long/short. Not RSI. Not EMA. |
+| **Policy** | Hard no on missing stops, excess leverage, crowded books, and alt baskets that are one BTC bet. |
+| **Execution** | Dry-run by default. Sends only with `--live` **and** API keys. |
 
-FX-GLITCH is that missing layer.
+It does **not** invent chart entries. Default action is stand aside.
 
-The 19 August 2026 squeeze is the example this repo already measured: ~$2.7bn of shorts were force-bought, and the setup was public in funding and open interest. Price-action systems can look like they “caught” that move after the fact. Positioning data is what actually described the crowd *during* it. See [docs/INTELLIGENCE.md](docs/INTELLIGENCE.md).
+```
+Agent  →  FX-GLITCH (positioning + policy)  →  Binance MCP / USD-M
+                │
+                ├── BLOCK  (no order)
+                └── ALLOW  (dry-run, or live if you said so)
+```
 
 ---
 
-## 60-second judge flow (offline, no keys)
+## 60-second demo (no keys, no network)
 
 ```bash
 python agent.py --demo
 ```
 
 ```
-BLOCK  no-stop 20x            no stop price — refusing to open an unprotected position
-BLOCK  correlated alts        already 3 long positions — that is one BTC bet 3 times over
-BLOCK  crowded long veto      positioning veto: euphoric longs
-ALLOW  clean dry-run          all guards passed — dry-run until --live
+BLOCK  no-stop 20x             no stop — unprotected position refused
+BLOCK  correlated alts         3 alt longs = one BTC bet, entered 3 times
+BLOCK  crowded long veto       euphoric longs — they are paying to stay
+ALLOW  clean dry-run           guards passed — still not sent
 ```
 
-Dashboard: `python serve.py` then **Run 60-second judge demo**.
+**Correlated alts:** ETH, SOL, DOGE, WIF usually move with Bitcoin. Four “small” longs are often one BTC long. The cap is three same-direction tickets.
+
+---
+
+## Pair with Agent OS
+
+```bash
+claude mcp add fx-glitch -- python -m fxglitch.agent.mcp_server
+claude mcp add binance-mcp-server --transport http https://agent.binance.com/mcp/agentic
+```
+
+Or use [`mcp.json`](mcp.json) in this repo.
+
+| This MCP | Official Binance MCP |
+|---|---|
+| `python -m fxglitch.agent.mcp_server` | `https://agent.binance.com/mcp/agentic` |
+| Is the trade allowed? | Place it, if you still want to |
+
+Skill file for agents: [`skills/fx-glitch/SKILL.md`](skills/fx-glitch/SKILL.md)
 
 ---
 
@@ -71,69 +66,59 @@ Dashboard: `python serve.py` then **Run 60-second judge demo**.
 
 | Tool | What it does |
 |---|---|
-| `get_positioning` | Public Binance USD-M briefing. No API key. Not RSI/EMA. |
-| `propose_from_positioning` | Default: stand aside. This layer does not invent entries. |
-| `parse_external_signal` | Telegram-style signal → candidate. Still not an order. |
-| `check_policy` | Hard guards. Refuse, never silently resize. |
-| `run_cycle` | Briefing → proposal → policy. Dry-run unless `live=true` **and** keys. |
+| `get_positioning` | Public USD-M briefing. No API key. |
+| `propose_from_positioning` | Default: **stand aside**. Does not invent entries. |
+| `parse_external_signal` | Signal text → candidate. Still not an order. |
+| `check_policy` | Guards. Refuses. Never silently resizes. |
+| `run_cycle` | Briefing → proposal → policy. Dry-run unless `live=true` and keys. |
 | `judge_demo` | The four cases above. |
 
 ---
 
-## Live Binance (optional)
+## Run
 
-Public briefing needs no keys. Sending does.
+```bash
+python -m pip install -r requirements.txt
+python agent.py --demo
+python agent.py --symbol BTCUSDT
+python agent.py --message "BTCUSDT long CMP tp 120000 sl 105000 lev 5x"
+python -m unittest discover tests
+```
+
+Local desk: `python serve.py --open` → http://127.0.0.1:8765  
+Live desk: https://fxglitch.xyz
+
+Sending to Binance is optional:
 
 ```
 BINANCE_API_KEY
 BINANCE_SECRET_KEY
-# optional: BINANCE_FUTURES_BASE_URL=https://demo-fapi.binance.com
 ```
 
-```bash
-python agent.py --symbol BTCUSDT
-python agent.py --message "BTCUSDT long CMP tp 120000 sl 105000 lev 5x"
-python live.py donchian_breakout --venue binance --symbols BTCUSDT   # archive path
-```
-
-`--live` on either entry point actually sends. Without it, every decision is computed and not sent.
-
-Venue: [fxglitch/venues/binance.py](fxglitch/venues/binance.py) — HMAC, exchange filters, MARK_PRICE protective stops.
+`--live` actually sends. Without it, every decision is computed and **not** sent.
 
 ---
 
-## Tests
-
-```bash
-python -m unittest discover tests
-```
-
-Agent OS path: `tests/test_agent.py`. Binance venue (offline fakes): `tests/test_binance.py`.
-
----
-
-## Layout
+## Repo map
 
 ```
-fxglitch/agent/         the product (positioning, policy, MCP, HTTP API)
-fxglitch/venues/        Binance USDⓈ-M + Bitunix
-fxglitch/live/          guards, portfolio (BTC-equivalent exposure), state
-fxglitch/derivs.py      funding / OI thresholds used by the briefing
-web/                    judge dashboard
-skills/fx-glitch/       Agent OS skill file
-docs/HACKATHON.md       published rules only
-mcp.json                how to pair this MCP with Binance's
-strategies/             research archive — not used by agent.py / MCP
+fxglitch/agent/     the product — positioning, policy, MCP, HTTP
+fxglitch/live/      guards + BTC-equivalent exposure
+fxglitch/venues/    Binance USDⓈ-M
+skills/fx-glitch/   Agent OS skill
+mcp.json            pair this MCP with Binance’s
+public/             desk UI
+docs/HACKATHON.md   published contest rules only
+strategies/         research archive — not used by the agent
 ```
 
 ---
 
 ## Honest limits
 
-- Default is dry-run. A good policy pass is not a promise of profit.
-- Funding extremes are **contrarian labels**, not a forecast that price will reverse.
-- Binance free OI history is ~30 days. Do not pretend you backtested OI over years.
-- Binance did not publish a numeric judging rubric. We did not invent one.
-- You still have to follow @Binance, repost, reply, and complete the survey.
+- A policy pass is not a profit forecast.
+- Funding extremes are labels on the crowd, not a promise that price reverses.
+- Chart strategies in `strategies/` are archive. The live path does not call them.
+- Binance did not publish a numeric judging rubric. This repo does not invent one.
 
-Deadline: **8 Sep 2026 23:59 UTC**.
+Built by [Daddymuphasa](https://github.com/Daddymuphasa).
