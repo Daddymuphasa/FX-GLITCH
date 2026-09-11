@@ -51,12 +51,8 @@ def _json(payload, status=200):
     return status, "application/json; charset=utf-8", body
 
 
-def _bitunix(body: dict | None = None) -> Bitunix:
-    body = body or {}
-    key = str(body.get("api_key") or "").strip()
-    secret = str(body.get("secret") or "").strip()
-    if key and secret:
-        return Bitunix(api_key=key, secret_key=secret)
+def _bitunix() -> Bitunix:
+    """Desk credentials only — never from the browser."""
     return Bitunix()
 
 
@@ -65,7 +61,7 @@ def _context(symbol: str | None, body: dict | None = None):
     mark = None
     balance = None
     try:
-        venue = _bitunix(body)
+        venue = _bitunix()
         instruments = venue.instruments()
         if not instruments:
             instruments = None
@@ -116,7 +112,7 @@ def dispatch(method: str, path: str, query: dict, body: dict):
             "user_keys_ok": True,
         })
     if path == "/api/account":
-        venue = _bitunix(body if method == "POST" else None)
+        venue = _bitunix()
         if not venue.authenticated:
             return _json({"venue": "bitunix", "authenticated": False})
         try:
@@ -179,12 +175,12 @@ def dispatch(method: str, path: str, query: dict, body: dict):
         if not message:
             return _json({"error": "message is required"}, 400)
         equity = float(body.get("equity") or 1000)
-        venue = _bitunix(body)
-        instruments, mark, balance = _context(None, body)
+        venue = _bitunix()
+        instruments, mark, balance = _context(None)
         rec = recommend(message, equity=equity, mark=mark, instruments=instruments, balance=balance)
         symbol = rec.bitunix_symbol or rec.binance_symbol
         if symbol and mark is None:
-            instruments, mark, balance = _context(symbol, body)
+            instruments, mark, balance = _context(symbol)
             rec = recommend(message, equity=(balance.equity if balance else equity),
                             mark=mark, instruments=instruments, balance=balance)
         plan = plan_by_id(rec, plan_id)
@@ -202,7 +198,7 @@ def dispatch(method: str, path: str, query: dict, body: dict):
             }, 400)
         if want_live and not venue.authenticated:
             return _json({
-                "error": "Connect Bitunix (API key + secret, no withdrawal) to send. Until then this is a paper ticket.",
+                "error": "Set BITUNIX_API_KEY and BITUNIX_SECRET_KEY in .env on the desk, then restart. Until then this is a paper ticket.",
                 "dry_run": True,
                 "plan": plan,
             }, 400)

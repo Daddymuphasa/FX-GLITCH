@@ -32,7 +32,7 @@
           <h1>FX-GLITCH</h1>
         </div>
       </div>
-      <button id="btn-keys" class="admin-only" type="button">Connect Bitunix</button>
+      <button id="btn-keys" class="admin-only" type="button">Bitunix · .env</button>
     </header>
 
     <section class="glass admin-desk admin-only" id="admin-desk">
@@ -88,10 +88,8 @@
 
   <dialog id="keys-dialog" class="glass">
     <form method="dialog" id="keys-form">
-      <h2>Your Bitunix</h2>
-      <p class="hint">Futures API key with no withdrawal. Keys stay on this computer and are sent only when you Take a trade live. The selected risk (Easy–Max) sizes the order; SL and TP ride with it.</p>
-      <label>API key <input id="user-key" type="text" autocomplete="off" /></label>
-      <label>Secret <input id="user-secret" type="password" autocomplete="off" /></label>
+      <h2>Bitunix on this desk</h2>
+      <p class="hint" id="keys-hint">Keys load from <code>.env</code> (<code>BITUNIX_API_KEY</code> / <code>BITUNIX_SECRET_KEY</code>). They never go in the browser.</p>
       <label class="toggle"><input id="send-live" type="checkbox" /> Send live to Bitunix (off = paper)</label>
       <menu>
         <button value="cancel" type="submit">Close</button>

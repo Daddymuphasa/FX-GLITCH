@@ -23,19 +23,27 @@ function money(n) {
   return (v < 0 ? "-" : "") + "$" + Math.abs(v).toFixed(2);
 }
 
+function wipeBrowserKeys() {
+  try {
+    const k = JSON.parse(localStorage.getItem(KEYS) || "{}");
+    delete k.api_key;
+    delete k.secret;
+    localStorage.setItem(KEYS, JSON.stringify({ live: !!k.live, equity: k.equity }));
+  } catch (_err) {}
+  localStorage.removeItem("fxg.binance");
+}
+
 function userKeys() {
   try {
-    const fresh = JSON.parse(localStorage.getItem(KEYS) || "null");
-    if (fresh && typeof fresh === "object") return fresh;
-    return JSON.parse(localStorage.getItem("fxg.binance") || "{}");
+    const fresh = JSON.parse(localStorage.getItem(KEYS) || "{}");
+    return { live: !!fresh.live, equity: fresh.equity };
   } catch (_err) {
     return {};
   }
 }
 
 function hasUserKeys() {
-  const k = userKeys();
-  return !!(k.api_key && k.secret) || deskBitunix;
+  return deskBitunix;
 }
 
 function loadBook() {
@@ -246,7 +254,6 @@ async function loadRecommend(message, mark) {
 }
 
 async function execute(message, plan, details) {
-  const keys = isAdmin ? userKeys() : {};
   const wantLive = wantLiveSend();
   msgEl.textContent = wantLive ? "Sending to Bitunix…" : "Taking…";
   try {
@@ -256,8 +263,6 @@ async function execute(message, plan, details) {
       equity: Number(equityEl.value) || 1000,
       confirm: true,
       live: wantLive,
-      api_key: wantLive ? (keys.api_key || "") : "",
-      secret: wantLive ? (keys.secret || "") : "",
     });
     const p = data.plan;
     const rec = data.recommendation || {};
@@ -276,7 +281,7 @@ async function execute(message, plan, details) {
       const oid = data.order && data.order.id ? ` Order ${data.order.id}.` : "";
       msgEl.textContent = `${p.label} sent to Bitunix. ${p.leverage}x ${symbol}. SL ${p.stop} TP ${p.take_profit}.${oid}`;
     } else {
-      msgEl.textContent = `${p.label} paper ticket. ${p.leverage}x ${symbol}. SL ${p.stop} TP ${p.take_profit}. Connect Bitunix + Send live to place it.`;
+      msgEl.textContent = `${p.label} paper ticket. ${p.leverage}x ${symbol}. SL ${p.stop} TP ${p.take_profit}. Tick Send live on the desk to place it from .env.`;
     }
   } catch (err) {
     msgEl.textContent = err.message;
@@ -391,17 +396,23 @@ function fillChats(data) {
 
 function paintKeysButton() {
   const btn = document.getElementById("btn-keys");
-  if (btn) btn.textContent = hasUserKeys() ? "Bitunix connected" : "Connect Bitunix";
+  if (btn) btn.textContent = deskBitunix ? "Bitunix · .env" : "Bitunix · missing";
   const pill = document.getElementById("bx-status");
   if (pill) {
-    pill.textContent = hasUserKeys() ? "bitunix: ready" : "bitunix";
-    pill.classList.toggle("ok", hasUserKeys());
+    pill.textContent = deskBitunix ? "bitunix: .env" : "bitunix";
+    pill.classList.toggle("ok", deskBitunix);
+  }
+  const keysHint = document.getElementById("keys-hint");
+  if (keysHint) {
+    keysHint.textContent = deskBitunix
+      ? "Keys are loaded from .env on this PC. They never go in the browser."
+      : "Add BITUNIX_API_KEY and BITUNIX_SECRET_KEY to .env, then restart serve.py.";
   }
   const hint = document.getElementById("book-hint");
   if (hint) {
     hint.textContent = wantLiveSend()
-      ? "Take sends the selected risk to your Bitunix futures account."
-      : "Paper until you connect Bitunix and tick Send live.";
+      ? "Take sends the selected risk to Bitunix using .env keys."
+      : "Paper until .env keys are loaded and Send live is ticked.";
   }
   if (currentRec) {
     const plans = currentRec.plans || [];
@@ -412,11 +423,10 @@ function paintKeysButton() {
 }
 
 async function boot() {
+  wipeBrowserKeys();
   renderBook();
   const savedEq = userKeys().equity;
   if (savedEq) equityEl.value = savedEq;
-  document.getElementById("user-key").value = userKeys().api_key || "";
-  document.getElementById("user-secret").value = userKeys().secret || "";
   document.getElementById("send-live").checked = !!userKeys().live;
   try {
     const health = await get("/api/health");
@@ -468,42 +478,29 @@ document.getElementById("btn-take").onclick = () => {
 };
 
 document.getElementById("btn-keys").onclick = () => keysDlg.showModal();
-document.getElementById("keys-form").addEventListener("submit", async (ev) => {
+document.getElementById("keys-form").addEventListener("submit", (ev) => {
   if (ev.submitter && ev.submitter.id === "btn-save-keys") {
-    const api_key = document.getElementById("user-key").value.trim();
-    const secret = document.getElementById("user-secret").value.trim();
     localStorage.setItem(KEYS, JSON.stringify({
-      api_key,
-      secret,
       equity: Number(equityEl.value) || 1000,
       live: document.getElementById("send-live").checked,
     }));
     paintKeysButton();
-    if (api_key && secret) {
-      try {
-        const acc = await post("/api/account", { api_key, secret });
-        if (acc && acc.equity) equityEl.value = Math.max(10, Math.round(acc.equity));
-        msgEl.textContent = acc.available != null
-          ? `Bitunix connected. ${acc.available} USDT free.`
-          : "Bitunix keys saved.";
-      } catch (err) {
-        msgEl.textContent = "Keys saved, but Bitunix said: " + err.message;
-      }
-    }
     if (currentRec) renderPlans(currentRec);
   }
 });
 document.getElementById("send-live").onchange = () => {
-  const k = userKeys();
-  k.live = document.getElementById("send-live").checked;
-  localStorage.setItem(KEYS, JSON.stringify(k));
+  localStorage.setItem(KEYS, JSON.stringify({
+    equity: Number(equityEl.value) || 1000,
+    live: document.getElementById("send-live").checked,
+  }));
   paintKeysButton();
 };
 
 equityEl.onchange = () => {
-  const k = userKeys();
-  k.equity = Number(equityEl.value) || 1000;
-  localStorage.setItem(KEYS, JSON.stringify(k));
+  localStorage.setItem(KEYS, JSON.stringify({
+    equity: Number(equityEl.value) || 1000,
+    live: document.getElementById("send-live").checked,
+  }));
   if (currentRaw) loadRecommend(currentRaw);
 };
 
