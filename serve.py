@@ -17,6 +17,7 @@ NEEDED = (
     ("telethon", "telethon"),
     ("qrcode", "qrcode"),
     ("PIL", "pillow"),
+    ("webauthn", "webauthn"),
 )
 
 
@@ -59,7 +60,7 @@ def _port_open(host: str, port: int) -> bool:
 
 def main() -> None:
     p = argparse.ArgumentParser(description="FX-GLITCH Agent OS dashboard")
-    p.add_argument("--host", default=os.environ.get("FXGLITCH_HOST", "127.0.0.1"))
+    p.add_argument("--host", default=os.environ.get("FXGLITCH_HOST", "localhost"))
     p.add_argument("--port", type=int, default=int(os.environ.get("PORT") or os.environ.get("FXGLITCH_PORT") or 8765))
     p.add_argument("--open", action="store_true", help="open the desk in a browser")
     p.add_argument("--no-open", action="store_true", help="do not open a browser")
@@ -91,6 +92,7 @@ def main() -> None:
     bridge.start()
     httpd = ThreadingHTTPServer((args.host, args.port), Handler)
     print(f"FX-GLITCH Agent OS  {url}")
+    print("Open http://localhost:%s for passkeys (not 127.0.0.1)." % args.port)
     print("Telegram QR login and group watch run in this process.")
     print("dry-run by default. MCP: python -m fxglitch.agent.mcp_server")
     if want_open:

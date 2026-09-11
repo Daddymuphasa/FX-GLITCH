@@ -36,13 +36,18 @@ class handler(BaseHTTPRequestHandler):
                 payload = json.loads(raw.decode() or "{}")
             except json.JSONDecodeError:
                 payload = {}
-        status, content_type, body = dispatch(
-            method, parsed.path, parse_qs(parsed.query), payload
+        result = dispatch(
+            method, parsed.path, parse_qs(parsed.query), payload, dict(self.headers)
         )
+        status, content_type, body, *rest = result
+        extra = rest[0] if rest else {}
         self.send_response(status)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
         self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Credentials", "true")
+        for key, value in extra.items():
+            self.send_header(key, value)
         self.end_headers()
         self.wfile.write(body)

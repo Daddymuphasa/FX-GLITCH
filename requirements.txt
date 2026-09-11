@@ -9,3 +9,6 @@ requests>=2.31     # tools/fetch_crypto.py (crypto candles)
 telethon>=1.36
 qrcode>=7.4
 pillow>=10.0
+
+# Passkey (WebAuthn) accounts on the desk
+webauthn>=2.2

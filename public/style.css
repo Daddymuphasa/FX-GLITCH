@@ -347,8 +347,48 @@ dialog menu { display: flex; justify-content: flex-end; gap: 8px; padding: 0; ma
 .toggle input { width: auto; }
 
 html:not(.is-admin) .admin-only { display: none !important; }
+html:not(.is-user) .user-only { display: none !important; }
+html.is-user .guest-only { display: none !important; }
+
+.top-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.who {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--visor);
+}
+.gate {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 24px clamp(12px, 4vw, 48px);
+  background: rgba(5, 5, 6, 0.35);
+}
+html.is-user .gate,
+html.is-peek .gate { display: none; }
+.gate-card {
+  width: min(420px, 100%);
+  border-radius: 22px;
+  padding: 22px 20px 18px;
+}
+.gate-card h1 { margin-bottom: 8px; }
+.gate-card .primary { width: 100%; margin-top: 8px; }
+.gate-card button { width: 100%; margin-top: 8px; }
+.linkish {
+  background: transparent;
+  border: 0;
+  color: var(--muted);
+  text-decoration: underline;
+  cursor: pointer;
+  font-size: 13px;
+}
+.take-bar.user-only { }
 
 @media (max-width: 860px) {
+  .gate { justify-content: center; padding-top: 12vh; }
   .app {
     max-width: 100%;
     margin: 0 auto;

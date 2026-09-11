@@ -13,7 +13,9 @@ let selectedId = "";
 let selectedPlan = "mid";
 let currentRec = null;
 let selectedSignal = null;
-const isAdmin = document.documentElement.classList.contains("is-admin");
+let isAdmin = false;
+let signedIn = false;
+let meName = "";
 const KEYS = "fxg.bitunix";
 const BOOK = "fxg.book";
 let deskBitunix = false;
@@ -86,12 +88,12 @@ function saveFill(fill) {
   const rows = loadBook();
   rows.unshift(fill);
   localStorage.setItem(BOOK, JSON.stringify(rows.slice(0, 40)));
-  renderBook();
+  renderBook(rows);
 }
 
-function renderBook() {
+function renderBook(rows) {
   if (!bookEl) return;
-  const rows = loadBook();
+  rows = rows || loadBook();
   if (!rows.length) {
     bookEl.innerHTML = "<p class='hint'>No tickets yet. Take a setup and it lands here.</p>";
     return;
@@ -107,7 +109,7 @@ function renderBook() {
 function setFlow(_n) {}
 
 async function get(url) {
-  const res = await fetch(url);
+  const res = await fetch(url, { credentials: "include" });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || res.statusText);
   return data;
@@ -116,12 +118,140 @@ async function get(url) {
 async function post(url, body) {
   const res = await fetch(url, {
     method: "POST",
+    credentials: "include",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body || {}),
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || res.statusText);
   return data;
+}
+
+function b64urlToBuf(s) {
+  const pad = "=".repeat((4 - (s.length % 4)) % 4);
+  const raw = atob(s.replace(/-/g, "+").replace(/_/g, "/") + pad);
+  const buf = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) buf[i] = raw.charCodeAt(i);
+  return buf.buffer;
+}
+
+function bufToB64url(buf) {
+  const bytes = new Uint8Array(buf);
+  let s = "";
+  bytes.forEach((b) => { s += String.fromCharCode(b); });
+  return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+function revivePublicKey(options) {
+  const opts = JSON.parse(JSON.stringify(options));
+  opts.challenge = b64urlToBuf(opts.challenge);
+  if (opts.user && opts.user.id) opts.user.id = b64urlToBuf(opts.user.id);
+  (opts.excludeCredentials || []).forEach((c) => { c.id = b64urlToBuf(c.id); });
+  (opts.allowCredentials || []).forEach((c) => { c.id = b64urlToBuf(c.id); });
+  return opts;
+}
+
+function credToJSON(cred) {
+  const out = {
+    id: cred.id,
+    rawId: bufToB64url(cred.rawId),
+    type: cred.type,
+    response: {
+      clientDataJSON: bufToB64url(cred.response.clientDataJSON),
+    },
+    clientExtensionResults: cred.getClientExtensionResults ? cred.getClientExtensionResults() : {},
+  };
+  if (cred.response.attestationObject) {
+    out.response.attestationObject = bufToB64url(cred.response.attestationObject);
+  }
+  if (cred.response.authenticatorData) {
+    out.response.authenticatorData = bufToB64url(cred.response.authenticatorData);
+  }
+  if (cred.response.signature) {
+    out.response.signature = bufToB64url(cred.response.signature);
+  }
+  if (cred.response.userHandle) {
+    out.response.userHandle = bufToB64url(cred.response.userHandle);
+  }
+  return out;
+}
+
+function applySession(me) {
+  signedIn = !!(me && me.signed_in);
+  isAdmin = !!(me && me.admin);
+  meName = (me && me.name) || "";
+  document.documentElement.classList.toggle("is-user", signedIn);
+  document.documentElement.classList.toggle("is-admin", isAdmin);
+  if (signedIn) document.documentElement.classList.remove("is-peek");
+  const who = document.getElementById("who");
+  if (who) who.textContent = signedIn ? (meName + (isAdmin ? " · operator" : "")) : "";
+}
+
+async function refreshBook() {
+  if (!signedIn) {
+    renderBook(loadBook());
+    return;
+  }
+  try {
+    const box = await get("/api/book");
+    renderBook(box.fills || []);
+  } catch (_err) {
+    renderBook(loadBook());
+  }
+}
+
+function gateMsg(text) {
+  const el = document.getElementById("gate-msg");
+  if (el) el.textContent = text || "";
+}
+
+async function createPasskey() {
+  const name = (document.getElementById("pass-name").value || "").trim();
+  gateMsg("Waiting for your device…");
+  try {
+    const begin = await post("/api/auth/register", { action: "begin", name });
+    const cred = await navigator.credentials.create({ publicKey: revivePublicKey(begin.options) });
+    const me = await post("/api/auth/register", {
+      action: "finish",
+      flow_id: begin.flow_id,
+      credential: credToJSON(cred),
+    });
+    applySession(me);
+    gateMsg("");
+    await afterLogin();
+  } catch (err) {
+    gateMsg(err.message || String(err));
+  }
+}
+
+async function signInPasskey() {
+  const name = (document.getElementById("pass-name").value || "").trim();
+  gateMsg("Waiting for your passkey…");
+  try {
+    const begin = await post("/api/auth/login", { action: "begin", name });
+    const cred = await navigator.credentials.get({ publicKey: revivePublicKey(begin.options) });
+    const me = await post("/api/auth/login", {
+      action: "finish",
+      flow_id: begin.flow_id,
+      credential: credToJSON(cred),
+    });
+    applySession(me);
+    gateMsg("");
+    await afterLogin();
+  } catch (err) {
+    gateMsg(err.message || String(err));
+  }
+}
+
+async function afterLogin() {
+  await refreshBook();
+  paintKeysButton();
+  if (isAdmin) {
+    try {
+      const health = await get("/api/health");
+      fillAccounts(health && health.bitunix_accounts);
+    } catch (_err) {}
+  }
 }
 
 function uniqueSignals(signals) {
@@ -297,7 +427,8 @@ async function execute(message, plan, details) {
     const p = data.plan;
     const rec = data.recommendation || {};
     const symbol = rec.bitunix_symbol || rec.binance_symbol || "";
-    saveFill({
+    if (data.fills) renderBook(data.fills);
+    else saveFill({
       direction: rec.direction,
       symbol,
       plan: p.label,
@@ -460,7 +591,12 @@ function paintKeysButton() {
 
 async function boot() {
   wipeBrowserKeys();
-  renderBook();
+  try {
+    applySession(await get("/api/me"));
+  } catch (_err) {
+    applySession({ signed_in: false });
+  }
+  await refreshBook();
   const savedEq = userKeys().equity;
   if (savedEq) equityEl.value = savedEq;
   document.getElementById("send-live").checked = !!userKeys().live;
@@ -621,6 +757,19 @@ document.getElementById("btn-watch").onclick = async () => {
     chat_id: sel.value,
     title: sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].textContent : "",
   }));
+};
+
+document.getElementById("btn-register").onclick = createPasskey;
+document.getElementById("btn-login").onclick = signInPasskey;
+document.getElementById("btn-peek").onclick = () => {
+  document.documentElement.classList.add("is-peek");
+};
+document.getElementById("btn-in").onclick = () => {
+  document.documentElement.classList.remove("is-peek");
+};
+document.getElementById("btn-out").onclick = async () => {
+  try { await post("/api/auth/logout", {}); } catch (_err) {}
+  applySession({ signed_in: false });
 };
 
 boot();

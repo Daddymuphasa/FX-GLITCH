@@ -9,18 +9,23 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/style.css" />
-  <script>
-    (function () {
-      var host = location.hostname;
-      var admin = /(?:^|[?&])admin=1(?:&|$)/.test(location.search)
-        || host === "127.0.0.1" || host === "localhost";
-      document.documentElement.classList.toggle("is-admin", admin);
-    })();
-  </script>
 </head>
 <body>
   <div class="backdrop" aria-hidden="true">
     <img src="/assets/operator.jpg" alt="" />
+  </div>
+
+  <div id="gate" class="gate">
+    <div class="glass gate-card">
+      <p class="eyebrow">Your desk</p>
+      <h1>FX-GLITCH</h1>
+      <p class="hint">Unlock your account with a passkey — Windows Hello, Face ID, fingerprint, or your phone. No password. Exchange keys never leave the server.</p>
+      <label>Name <input id="pass-name" type="text" maxlength="32" autocomplete="username" placeholder="Your name" /></label>
+      <button id="btn-register" class="primary" type="button">Create passkey</button>
+      <button id="btn-login" type="button">I already have a passkey</button>
+      <p id="gate-msg" class="hint banner"></p>
+      <button id="btn-peek" class="linkish" type="button">Just look at setups</button>
+    </div>
   </div>
 
   <main class="app">
@@ -32,7 +37,12 @@
           <h1>FX-GLITCH</h1>
         </div>
       </div>
-      <button id="btn-keys" class="admin-only" type="button">Bitunix · .env</button>
+      <div class="top-actions">
+        <span id="who" class="who user-only"></span>
+        <button id="btn-keys" class="admin-only" type="button">Bitunix · .env</button>
+        <button id="btn-out" class="user-only" type="button">Sign out</button>
+        <button id="btn-in" class="guest-only" type="button">Passkey</button>
+      </div>
     </header>
 
     <section class="glass admin-desk admin-only" id="admin-desk">
@@ -74,14 +84,14 @@
       <p id="execute-msg" class="hint banner"></p>
     </section>
 
-    <section class="glass book">
-      <h2>Taken here</h2>
-      <p class="hint" id="book-hint">Paper until you connect Bitunix and tick Send live.</p>
+    <section class="glass book user-only">
+      <h2>Your tickets</h2>
+      <p class="hint" id="book-hint">Tied to your passkey. Not this browser alone.</p>
       <div id="book"></div>
     </section>
   </main>
 
-  <div class="take-bar glass">
+  <div class="take-bar glass user-only">
     <label class="equity-mini admin-only">Acct
       <select id="bx-account">
         <option value="1">1</option>
