@@ -25,7 +25,7 @@ from fxglitch.agent.plans import place_plan, recommend
 from fxglitch.venues.base import (
     LONG, SHORT, Instrument, OrderRequest, Position, VenueError,
 )
-from fxglitch.venues.bitunix import Bitunix, sign_request
+from fxglitch.venues.bitunix import Bitunix, from_slot, listed_accounts, sign_request, slot_credentials
 
 PAIRS = {"code": 0, "msg": "Success", "data": [
     {"symbol": "BTCUSDT", "base": "BTC", "quote": "USDT", "minTradeVolume": "0.0001",
@@ -102,6 +102,50 @@ class TestSignature(unittest.TestCase):
         import hmac, hashlib
         theirs = hmac.new(b"s", b"nt", hashlib.sha256).hexdigest()
         self.assertNotEqual(sign_request("k", "s", "n", "t"), theirs)
+
+
+class TestTwoAccounts(unittest.TestCase):
+    def setUp(self):
+        self._old = {k: os.environ.get(k) for k in (
+            "BITUNIX_API_KEY", "BITUNIX_SECRET_KEY", "BITUNIX_NAME",
+            "BITUNIX_API_KEY_1", "BITUNIX_SECRET_KEY_1", "BITUNIX_NAME_1",
+            "BITUNIX_API_KEY_2", "BITUNIX_SECRET_KEY_2", "BITUNIX_NAME_2",
+        )}
+        for k in self._old:
+            os.environ.pop(k, None)
+
+    def tearDown(self):
+        for k, v in self._old.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+
+    def test_slot_one_uses_unnumbered_env(self):
+        os.environ["BITUNIX_API_KEY"] = "k1"
+        os.environ["BITUNIX_SECRET_KEY"] = "s1"
+        os.environ["BITUNIX_NAME"] = "main"
+        key, secret, name = slot_credentials(1)
+        self.assertEqual((key, secret, name), ("k1", "s1", "main"))
+        listed = listed_accounts()
+        self.assertTrue(listed[0]["ready"])
+        self.assertFalse(listed[1]["ready"])
+
+    def test_slot_two_uses_numbered_env(self):
+        os.environ["BITUNIX_API_KEY"] = "k1"
+        os.environ["BITUNIX_SECRET_KEY"] = "s1"
+        os.environ["BITUNIX_API_KEY_2"] = "k2"
+        os.environ["BITUNIX_SECRET_KEY_2"] = "s2"
+        os.environ["BITUNIX_NAME_2"] = "alt"
+        a = from_slot(1)
+        b = from_slot(2)
+        self.assertEqual(a.api_key, "k1")
+        self.assertEqual(b.api_key, "k2")
+        self.assertEqual(b.account_name, "alt")
+        listed = listed_accounts()
+        self.assertTrue(listed[0]["ready"] and listed[1]["ready"])
+        self.assertNotIn("k2", str(listed))
+        self.assertNotIn("s2", str(listed))
 
 
 class TestCredentials(unittest.TestCase):

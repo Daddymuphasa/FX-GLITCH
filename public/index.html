@@ -82,6 +82,12 @@
   </main>
 
   <div class="take-bar glass">
+    <label class="equity-mini admin-only">Acct
+      <select id="bx-account">
+        <option value="1">1</option>
+        <option value="2">2</option>
+      </select>
+    </label>
     <label class="equity-mini">USDT <input id="equity" type="number" inputmode="decimal" value="1000" min="10" step="10" /></label>
     <button id="btn-take" class="primary" type="button" disabled>Take trade</button>
   </div>
@@ -89,7 +95,7 @@
   <dialog id="keys-dialog" class="glass">
     <form method="dialog" id="keys-form">
       <h2>Bitunix on this desk</h2>
-      <p class="hint" id="keys-hint">Keys load from <code>.env</code> (<code>BITUNIX_API_KEY</code> / <code>BITUNIX_SECRET_KEY</code>). They never go in the browser.</p>
+      <p class="hint" id="keys-hint">Two accounts in <code>.env</code>: <code>BITUNIX_API_KEY</code> / <code>BITUNIX_SECRET_KEY</code> and <code>BITUNIX_API_KEY_2</code> / <code>BITUNIX_SECRET_KEY_2</code>. Keys never go in the browser. Pick 1 or 2 in the take bar.</p>
       <label class="toggle"><input id="send-live" type="checkbox" /> Send live to Bitunix (off = paper)</label>
       <menu>
         <button value="cancel" type="submit">Close</button>

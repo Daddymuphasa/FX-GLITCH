@@ -188,13 +188,53 @@ def _urlopen_transport(method: str, url: str, headers: dict, body: str | None) -
         raise VenueError("bitunix", "network", str(exc.reason), retryable=True) from None
 
 
+def _env(name: str) -> str:
+    return (os.environ.get(name) or "").strip()
+
+
+def slot_credentials(slot: int = 1) -> tuple[str, str, str]:
+    """API key, secret, display name for Bitunix account 1 or 2. Never log these."""
+    try:
+        slot = int(slot)
+    except (TypeError, ValueError):
+        slot = 1
+    if slot not in (1, 2):
+        slot = 1
+    if slot == 1:
+        key = _env("BITUNIX_API_KEY") or _env("BITUNIX_API_KEY_1")
+        secret = _env("BITUNIX_SECRET_KEY") or _env("BITUNIX_SECRET_KEY_1")
+        name = _env("BITUNIX_NAME") or _env("BITUNIX_NAME_1") or "account-1"
+    else:
+        key = _env("BITUNIX_API_KEY_2")
+        secret = _env("BITUNIX_SECRET_KEY_2")
+        name = _env("BITUNIX_NAME_2") or "account-2"
+    return key, secret, name
+
+
+def listed_accounts() -> list[dict]:
+    """Ready flags only — no key material."""
+    rows = []
+    for slot in (1, 2):
+        key, secret, name = slot_credentials(slot)
+        rows.append({"id": slot, "name": name, "ready": bool(key and secret)})
+    return rows
+
+
+def from_slot(slot: int = 1) -> "Bitunix":
+    key, secret, name = slot_credentials(slot)
+    client = Bitunix(api_key=key, secret_key=secret)
+    client.account_id = 1 if slot not in (1, 2) else int(slot)
+    client.account_name = name
+    return client
+
+
 class Bitunix(Venue):
     """Bitunix futures. Credentials come from the environment, never arguments.
 
-    BITUNIX_API_KEY and BITUNIX_SECRET_KEY. They are read here, used to sign,
-    and never logged, echoed or written anywhere. Public endpoints work without
-    them, so market data and the symbol universe are available before you have
-    created a key at all - build and watch first, authenticate later.
+    Account 1: BITUNIX_API_KEY / BITUNIX_SECRET_KEY
+    Account 2: BITUNIX_API_KEY_2 / BITUNIX_SECRET_KEY_2
+    They are read here, used to sign, and never logged, echoed or written
+    anywhere. Public endpoints work without them.
     """
 
     name = "bitunix"

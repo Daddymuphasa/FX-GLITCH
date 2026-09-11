@@ -8,7 +8,7 @@ from http.server import BaseHTTPRequestHandler
 from urllib.parse import parse_qs, urlparse
 
 from ..venues.binance import Binance
-from ..venues.bitunix import Bitunix
+from ..venues.bitunix import Bitunix, from_slot, listed_accounts
 from ..venues.base import VenueError
 from .inbox import ingest, list_signals, publish_live, replace_signals
 from .mcp_server import TOOLS
@@ -51,17 +51,25 @@ def _json(payload, status=200):
     return status, "application/json; charset=utf-8", body
 
 
-def _bitunix() -> Bitunix:
+def _slot(value) -> int:
+    try:
+        slot = int(value)
+    except (TypeError, ValueError):
+        slot = 1
+    return slot if slot in (1, 2) else 1
+
+
+def _bitunix(slot: int = 1) -> Bitunix:
     """Desk credentials only — never from the browser."""
-    return Bitunix()
+    return from_slot(slot)
 
 
-def _context(symbol: str | None, body: dict | None = None):
+def _context(symbol: str | None, slot: int = 1):
     instruments = None
     mark = None
     balance = None
     try:
-        venue = _bitunix()
+        venue = _bitunix(slot)
         instruments = venue.instruments()
         if not instruments:
             instruments = None
@@ -84,14 +92,14 @@ def _recommend_body(body: dict):
         hint_mark = float(hint_mark) if hint_mark not in (None, "") else None
     except (TypeError, ValueError):
         hint_mark = None
-    instruments, mark, balance = _context(None)
+    slot = _slot(body.get("account"))
+    instruments, mark, balance = _context(None, slot)
     mark = hint_mark or mark
-    parsed_symbol = None
     rec_once = recommend(message, equity=equity, mark=mark, instruments=instruments,
                          balance=balance)
     parsed_symbol = rec_once.bitunix_symbol or rec_once.binance_symbol
     if parsed_symbol and mark is None:
-        instruments, mark, balance = _context(parsed_symbol)
+        instruments, mark, balance = _context(parsed_symbol, slot)
         rec_once = recommend(message, equity=(balance.equity if balance else equity),
                              mark=mark, instruments=instruments, balance=balance)
     return _json(rec_once.to_dict())
@@ -99,29 +107,37 @@ def _recommend_body(body: dict):
 
 def dispatch(method: str, path: str, query: dict, body: dict):
     if path == "/api/health":
-        venue = Bitunix()
-        live_ok = bool(venue.authenticated) and not os.environ.get("VERCEL")
+        accounts = listed_accounts()
+        live_ok = any(a["ready"] for a in accounts) and not os.environ.get("VERCEL")
         return _json({
             "ok": True,
             "product": "FX-GLITCH Agent OS",
             "dry_run": not live_ok,
-            "bitunix": bool(venue.authenticated),
+            "bitunix": live_ok,
+            "bitunix_accounts": accounts,
             "binance": bool(Binance().authenticated),
             "venue": "bitunix",
             "live_allowed": live_ok,
             "user_keys_ok": True,
         })
     if path == "/api/account":
-        venue = _bitunix()
+        slot = _slot((body or {}).get("account") or (query.get("account") or ["1"])[0])
+        venue = _bitunix(slot)
+        accounts = listed_accounts()
         if not venue.authenticated:
-            return _json({"venue": "bitunix", "authenticated": False})
+            return _json({"venue": "bitunix", "account": slot, "authenticated": False,
+                          "accounts": accounts})
         try:
             bal = venue.balance()
         except VenueError as exc:
-            return _json({"venue": "bitunix", "authenticated": True, "error": str(exc)}, 400)
+            return _json({"venue": "bitunix", "account": slot, "authenticated": True,
+                          "accounts": accounts, "error": str(exc)}, 400)
         return _json({
             "venue": "bitunix",
+            "account": slot,
+            "name": getattr(venue, "account_name", f"account-{slot}"),
             "authenticated": True,
+            "accounts": accounts,
             "equity": bal.equity,
             "available": bal.available,
             "currency": bal.currency,
@@ -175,12 +191,13 @@ def dispatch(method: str, path: str, query: dict, body: dict):
         if not message:
             return _json({"error": "message is required"}, 400)
         equity = float(body.get("equity") or 1000)
-        venue = _bitunix()
-        instruments, mark, balance = _context(None)
+        slot = _slot(body.get("account"))
+        venue = _bitunix(slot)
+        instruments, mark, balance = _context(None, slot)
         rec = recommend(message, equity=equity, mark=mark, instruments=instruments, balance=balance)
         symbol = rec.bitunix_symbol or rec.binance_symbol
         if symbol and mark is None:
-            instruments, mark, balance = _context(symbol)
+            instruments, mark, balance = _context(symbol, slot)
             rec = recommend(message, equity=(balance.equity if balance else equity),
                             mark=mark, instruments=instruments, balance=balance)
         plan = plan_by_id(rec, plan_id)
@@ -197,25 +214,29 @@ def dispatch(method: str, path: str, query: dict, body: dict):
                 "plan": plan,
             }, 400)
         if want_live and not venue.authenticated:
+            env_hint = "BITUNIX_API_KEY / BITUNIX_SECRET_KEY" if slot == 1 else "BITUNIX_API_KEY_2 / BITUNIX_SECRET_KEY_2"
             return _json({
-                "error": "Set BITUNIX_API_KEY and BITUNIX_SECRET_KEY in .env on the desk, then restart. Until then this is a paper ticket.",
+                "error": f"Account {slot} has no keys. Set {env_hint} in .env, then restart.",
                 "dry_run": True,
                 "plan": plan,
+                "account": slot,
             }, 400)
         if want_live:
             try:
                 placed = place_plan(venue, rec, plan)
             except VenueError as exc:
-                return _json({"error": str(exc), "dry_run": True, "plan": plan}, 400)
+                return _json({"error": str(exc), "dry_run": True, "plan": plan, "account": slot}, 400)
             return _json({
                 "sent": True, "dry_run": False, "venue": "bitunix",
+                "account": slot,
+                "account_name": getattr(venue, "account_name", f"account-{slot}"),
                 "order": {"id": placed["order_id"], "message": placed.get("message") or ""},
                 "plan": plan, "recommendation": rec.to_dict(),
                 "qty": placed.get("qty"),
             })
-        return _json({"sent": False, "dry_run": True, "venue": "bitunix", "plan": plan,
-                      "proposal": proposal.to_dict(), "recommendation": rec.to_dict(),
-                      "hint": "Paper ticket. Connect Bitunix and tick Send live to place it."})
+        return _json({"sent": False, "dry_run": True, "venue": "bitunix", "account": slot,
+                      "plan": plan, "proposal": proposal.to_dict(), "recommendation": rec.to_dict(),
+                      "hint": "Paper ticket. Tick Send live to place it on the selected Bitunix account."})
     if path == "/api/signals" and method == "GET":
         return _json({"signals": list_signals()})
     if path == "/api/signals" and method == "POST":
