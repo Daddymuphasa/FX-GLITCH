@@ -313,6 +313,13 @@ def fetch_mark(symbol: str | None) -> float | None:
     if not symbol:
         return None
     try:
+        from ..venues.bitunix import Bitunix
+        mark = Bitunix().mark_price(symbol)
+        if mark:
+            return mark
+    except Exception:
+        pass
+    try:
         from ..venues.binance import Binance
         row = Binance()._request("GET", "/fapi/v1/premiumIndex", query={"symbol": symbol})
         value = float(row.get("markPrice") or 0)
@@ -329,8 +336,9 @@ def plan_by_id(rec: Recommendation, plan_id: str) -> dict | None:
 
 
 def proposal_from_plan(rec: Recommendation, plan: dict) -> ProposedTrade:
+    symbol = rec.bitunix_symbol or rec.binance_symbol or "UNKNOWN"
     return ProposedTrade(
-        symbol=rec.binance_symbol or rec.bitunix_symbol or "UNKNOWN",
+        symbol=symbol,
         action="open",
         direction=rec.direction,
         leverage=int(plan["leverage"]),
@@ -340,6 +348,46 @@ def proposal_from_plan(rec: Recommendation, plan: dict) -> ProposedTrade:
         entry=plan["entry"],
         stop=plan["stop"],
         take_profit=plan["take_profit"],
-        reason=f"{plan['label']} — Telegram {rec.bitunix_symbol} → Binance {rec.binance_symbol}",
+        reason=f"{plan['label']} — Telegram {symbol} on Bitunix",
         source="telegram",
     )
+
+
+def place_plan(venue, rec: Recommendation, plan: dict) -> dict:
+    """Set leverage, then market-open with SL/TP on the same Bitunix call."""
+    from datetime import datetime, timezone
+    from decimal import Decimal
+
+    from ..engine import LONG, SHORT
+    from ..venues.base import OrderRequest, VenueError
+
+    symbol = rec.bitunix_symbol or rec.binance_symbol
+    if not symbol:
+        raise VenueError(getattr(venue, "name", "bitunix"), "no-symbol",
+                         "no pair on this signal")
+    inst = venue.instruments().get(symbol)
+    if inst is None or not inst.tradeable:
+        raise VenueError(getattr(venue, "name", "bitunix"), "unknown-symbol",
+                         f"{symbol} is not a tradeable Bitunix perpetual")
+    qty = inst.round_qty(plan["qty"])
+    ok, why = inst.fits(qty)
+    if not ok:
+        raise VenueError(getattr(venue, "name", "bitunix"), "size-rejected", why)
+    venue.set_leverage(symbol, int(plan["leverage"]))
+    result = venue.place(OrderRequest(
+        symbol=symbol,
+        direction=LONG if rec.direction == "LONG" else SHORT,
+        qty=qty,
+        stop_price=Decimal(str(plan["stop"])),
+        take_profit=Decimal(str(plan["take_profit"])),
+        client_id=f"fxg-{symbol}-{int(datetime.now(timezone.utc).timestamp())}",
+        reason=f"{plan['label']} Telegram {symbol}",
+    ))
+    return {
+        "sent": bool(result.accepted),
+        "order_id": result.venue_order_id,
+        "message": result.message,
+        "symbol": symbol,
+        "qty": str(qty),
+        "leverage": int(plan["leverage"]),
+    }

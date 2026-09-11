@@ -451,6 +451,31 @@ class Bitunix(Venue):
                             + float(row.get("isolationUnrealizedPNL", 0) or 0)),
         )
 
+    def mark_price(self, symbol: str) -> float | None:
+        """Last/mark from the public ticker. None if the pair is missing."""
+        rows = self.tickers([symbol])
+        for row in rows or []:
+            last = getattr(row, "last", None)
+            name = getattr(row, "symbol", "")
+            if name == symbol and last:
+                return float(last)
+        if rows:
+            last = getattr(rows[0], "last", None)
+            return float(last) if last else None
+        return None
+
+    def set_leverage(self, symbol: str, leverage: int, margin_coin: str = "USDT") -> dict:
+        """POST /api/v1/futures/account/change_leverage — before the order."""
+        return self._request(
+            "POST", "/api/v1/futures/account/change_leverage",
+            payload={
+                "symbol": symbol,
+                "marginCoin": margin_coin,
+                "leverage": int(leverage),
+            },
+            private=True,
+        )
+
     def position_mode(self) -> str:
         """HEDGE or ONE_WAY. Read once, then cached.
 

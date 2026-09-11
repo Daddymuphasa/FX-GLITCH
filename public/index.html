@@ -32,7 +32,7 @@
           <h1>FX-GLITCH</h1>
         </div>
       </div>
-      <button id="btn-keys" class="admin-only" type="button">Live Binance keys</button>
+      <button id="btn-keys" class="admin-only" type="button">Connect Bitunix</button>
     </header>
 
     <section class="glass admin-desk admin-only" id="admin-desk">
@@ -42,7 +42,7 @@
       </div>
       <p id="qr-status" class="hint">Scan here on this PC. Telegram → Settings → Devices → Link Desktop Device.</p>
       <span class="pill admin-only" id="tg-status">telegram</span>
-      <span class="pill admin-only" id="bn-status">binance</span>
+      <span class="pill admin-only" id="bx-status">bitunix</span>
       <div class="qr-row">
         <div class="qr-box" id="qr-box">QR</div>
         <div>
@@ -76,7 +76,7 @@
 
     <section class="glass book">
       <h2>Taken here</h2>
-      <p class="hint">Stays on this phone. Nothing sent to Binance.</p>
+      <p class="hint" id="book-hint">Paper until you connect Bitunix and tick Send live.</p>
       <div id="book"></div>
     </section>
   </main>
@@ -88,11 +88,11 @@
 
   <dialog id="keys-dialog" class="glass">
     <form method="dialog" id="keys-form">
-      <h2>Your Binance</h2>
-      <p class="hint">Keys stay on this phone/computer. They are only sent when you tap Take trade. Create a futures key with no withdrawal.</p>
+      <h2>Your Bitunix</h2>
+      <p class="hint">Futures API key with no withdrawal. Keys stay on this computer and are sent only when you Take a trade live. The selected risk (Easy–Max) sizes the order; SL and TP ride with it.</p>
       <label>API key <input id="user-key" type="text" autocomplete="off" /></label>
       <label>Secret <input id="user-secret" type="password" autocomplete="off" /></label>
-      <label class="toggle"><input id="send-live" type="checkbox" /> Send live (off = dry-run)</label>
+      <label class="toggle"><input id="send-live" type="checkbox" /> Send live to Bitunix (off = paper)</label>
       <menu>
         <button value="cancel" type="submit">Close</button>
         <button id="btn-save-keys" class="primary" value="default" type="submit">Save</button>

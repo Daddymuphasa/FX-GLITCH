@@ -45,13 +45,13 @@ def map_to_binance(raw: str | None, instruments: dict[str, Instrument] | None = 
         return PairMap("bitunix", "", "", False, False, None, "no USDT symbol in the signal")
     if instruments is None:
         return PairMap("bitunix", symbol, symbol, False, False, None,
-                       "Binance listing not checked yet")
+                       "listing not checked yet")
     info = instruments.get(symbol)
     if info is None:
         return PairMap("bitunix", symbol, symbol, False, False, None,
-                       f"{symbol} is not a Binance USDⓈ-M perpetual — will not send")
+                       f"{symbol} is not a listed USDT-M perpetual — will not send")
     if not info.tradeable:
         return PairMap("bitunix", symbol, symbol, True, False, info.max_leverage,
                        f"{symbol} is listed but not tradeable right now")
     return PairMap("bitunix", symbol, symbol, True, True, info.max_leverage,
-                   f"{symbol} is a tradeable Binance USDⓈ-M perpetual")
+                   f"{symbol} is a tradeable USDT-M perpetual")

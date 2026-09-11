@@ -29,7 +29,7 @@ class TestPairs(unittest.TestCase):
     def test_unlisted_pair_is_not_invented(self):
         mapped = map_to_binance("FOOBARUSDT", {})
         self.assertFalse(mapped.listed)
-        self.assertIn("not a Binance", mapped.note)
+        self.assertIn("not a listed", mapped.note)
 
     def test_listed_perp(self):
         inst = {"BTCUSDT": Instrument("BTCUSDT", "BTC", "USDT", 3, 2, Decimal("0.001"),

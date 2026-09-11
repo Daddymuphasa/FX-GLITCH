@@ -21,6 +21,7 @@ from decimal import Decimal
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from fxglitch.agent.plans import place_plan, recommend
 from fxglitch.venues.base import (
     LONG, SHORT, Instrument, OrderRequest, Position, VenueError,
 )
@@ -350,6 +351,34 @@ class TestOrders(unittest.TestCase):
         with self.assertRaises(VenueError) as caught:
             self.order_client().place(OrderRequest("FAKEUSDT", LONG, Decimal("1")))
         self.assertEqual(caught.exception.code, "unknown-symbol")
+
+    def test_place_plan_sets_leverage_and_sends_sl_tp(self):
+        c = self.order_client()
+        rec = recommend(
+            "BTCUSDT\nLong position\nEntry 100000\nTp 106000\nSl 98000\nLeverage 10x",
+            equity=1000, mark=100000, instruments=c.instruments(),
+        )
+        mid = next(p for p in rec.plans if p["id"] == "mid")
+        placed = place_plan(c, rec, mid)
+        self.assertTrue(placed["sent"])
+        self.assertEqual(placed["symbol"], "BTCUSDT")
+        lev = [x for x in c._transport.calls if "change_leverage" in x["url"]]
+        self.assertTrue(lev)
+        body = self.sent_body(c)
+        self.assertEqual(body["slPrice"], str(c.instruments()["BTCUSDT"].round_price(mid["stop"])))
+        self.assertIn("tpPrice", body)
+        self.assertEqual(body["orderType"], "MARKET")
+
+    def test_set_leverage_posts_symbol_and_margin_coin(self):
+        c = self.order_client()
+        c.set_leverage("BTCUSDT", 8)
+        call = [x for x in c._transport.calls if "change_leverage" in x["url"]][-1]
+        import json
+        body = json.loads(call["body"])
+        self.assertEqual(call["method"], "POST")
+        self.assertEqual(body["symbol"], "BTCUSDT")
+        self.assertEqual(body["marginCoin"], "USDT")
+        self.assertEqual(body["leverage"], 8)
 
     def test_close_sends_a_reduce_only_order_the_other_way(self):
         c = self.order_client(self.HEDGE)

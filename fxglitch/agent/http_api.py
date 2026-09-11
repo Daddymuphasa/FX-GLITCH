@@ -4,17 +4,15 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import datetime, timezone
-from decimal import Decimal
 from http.server import BaseHTTPRequestHandler
 from urllib.parse import parse_qs, urlparse
 
-from ..live.guards import Limits
 from ..venues.binance import Binance
-from ..venues.base import OrderRequest, VenueError
+from ..venues.bitunix import Bitunix
+from ..venues.base import VenueError
 from .inbox import ingest, list_signals, publish_live, replace_signals
 from .mcp_server import TOOLS
-from .plans import plan_by_id, proposal_from_plan, recommend
+from .plans import place_plan, plan_by_id, proposal_from_plan, recommend
 from .positioning import fetch_briefing
 from .session import from_signal, judge_demo, paper_balance, run_cycle
 from .telegram_in import ingest_update
@@ -53,18 +51,26 @@ def _json(payload, status=200):
     return status, "application/json; charset=utf-8", body
 
 
-def _context(symbol: str | None):
+def _bitunix(body: dict | None = None) -> Bitunix:
+    body = body or {}
+    key = str(body.get("api_key") or "").strip()
+    secret = str(body.get("secret") or "").strip()
+    if key and secret:
+        return Bitunix(api_key=key, secret_key=secret)
+    return Bitunix()
+
+
+def _context(symbol: str | None, body: dict | None = None):
     instruments = None
     mark = None
     balance = None
     try:
-        venue = Binance()
+        venue = _bitunix(body)
         instruments = venue.instruments()
         if not instruments:
             instruments = None
-        if symbol and instruments and symbol in instruments:
-            rows = venue._request("GET", "/fapi/v1/premiumIndex", query={"symbol": symbol})
-            mark = float(rows.get("markPrice") or 0) or None
+        if symbol:
+            mark = venue.mark_price(symbol)
         if venue.authenticated:
             balance = venue.balance()
     except Exception:
@@ -87,7 +93,7 @@ def _recommend_body(body: dict):
     parsed_symbol = None
     rec_once = recommend(message, equity=equity, mark=mark, instruments=instruments,
                          balance=balance)
-    parsed_symbol = rec_once.binance_symbol
+    parsed_symbol = rec_once.bitunix_symbol or rec_once.binance_symbol
     if parsed_symbol and mark is None:
         instruments, mark, balance = _context(parsed_symbol)
         rec_once = recommend(message, equity=(balance.equity if balance else equity),
@@ -97,15 +103,32 @@ def _recommend_body(body: dict):
 
 def dispatch(method: str, path: str, query: dict, body: dict):
     if path == "/api/health":
-        venue = Binance()
+        venue = Bitunix()
         live_ok = bool(venue.authenticated) and not os.environ.get("VERCEL")
         return _json({
             "ok": True,
             "product": "FX-GLITCH Agent OS",
             "dry_run": not live_ok,
-            "binance": bool(venue.authenticated),
+            "bitunix": bool(venue.authenticated),
+            "binance": bool(Binance().authenticated),
+            "venue": "bitunix",
             "live_allowed": live_ok,
             "user_keys_ok": True,
+        })
+    if path == "/api/account":
+        venue = _bitunix(body if method == "POST" else None)
+        if not venue.authenticated:
+            return _json({"venue": "bitunix", "authenticated": False})
+        try:
+            bal = venue.balance()
+        except VenueError as exc:
+            return _json({"venue": "bitunix", "authenticated": True, "error": str(exc)}, 400)
+        return _json({
+            "venue": "bitunix",
+            "authenticated": True,
+            "equity": bal.equity,
+            "available": bal.available,
+            "currency": bal.currency,
         })
     if path == "/api/hackathon":
         return _json(HACKATHON)
@@ -156,10 +179,12 @@ def dispatch(method: str, path: str, query: dict, body: dict):
         if not message:
             return _json({"error": "message is required"}, 400)
         equity = float(body.get("equity") or 1000)
-        instruments, mark, balance = _context(None)
+        venue = _bitunix(body)
+        instruments, mark, balance = _context(None, body)
         rec = recommend(message, equity=equity, mark=mark, instruments=instruments, balance=balance)
-        if rec.binance_symbol and mark is None:
-            instruments, mark, balance = _context(rec.binance_symbol)
+        symbol = rec.bitunix_symbol or rec.binance_symbol
+        if symbol and mark is None:
+            instruments, mark, balance = _context(symbol, body)
             rec = recommend(message, equity=(balance.equity if balance else equity),
                             mark=mark, instruments=instruments, balance=balance)
         plan = plan_by_id(rec, plan_id)
@@ -168,43 +193,33 @@ def dispatch(method: str, path: str, query: dict, body: dict):
         if not plan["policy_ok"]:
             return _json({"error": plan["policy_reason"], "recommendation": rec.to_dict()}, 400)
         proposal = proposal_from_plan(rec, plan)
-        user_key = str(body.get("api_key") or "").strip()
-        user_secret = str(body.get("secret") or "").strip()
-        venue = Binance(api_key=user_key, secret_key=user_secret) if user_key else Binance()
-        want_live = bool(body.get("live")) and bool(body.get("confirm")) and venue.authenticated
+        want_live = bool(body.get("live")) and bool(body.get("confirm"))
+        if want_live and os.environ.get("VERCEL"):
+            return _json({
+                "error": "Live Bitunix sends from the local desk (localhost), not from the public site.",
+                "dry_run": True,
+                "plan": plan,
+            }, 400)
         if want_live and not venue.authenticated:
             return _json({
-                "error": "Connect your Binance API key and secret to send. Until then this is a dry-run.",
+                "error": "Connect Bitunix (API key + secret, no withdrawal) to send. Until then this is a paper ticket.",
                 "dry_run": True,
                 "plan": plan,
             }, 400)
         if want_live:
-            listed = venue.instruments().get(proposal.symbol)
-            if listed is None or not listed.tradeable:
-                return _json({
-                    "error": f"{proposal.symbol} is not a tradeable Binance USDⓈ-M perpetual, so nothing was sent.",
-                    "dry_run": True,
-                    "plan": plan,
-                }, 400)
             try:
-                venue.set_leverage(proposal.symbol, int(plan["leverage"]))
-                result = venue.place(OrderRequest(
-                    symbol=proposal.symbol,
-                    direction=1 if proposal.direction == "LONG" else -1,
-                    qty=Decimal(str(plan["qty"])),
-                    stop_price=Decimal(str(plan["stop"])),
-                    take_profit=Decimal(str(plan["take_profit"])),
-                    client_id=f"fxg-{proposal.symbol}-{int(datetime.now(timezone.utc).timestamp())}",
-                    reason=proposal.reason,
-                ))
+                placed = place_plan(venue, rec, plan)
             except VenueError as exc:
                 return _json({"error": str(exc), "dry_run": True, "plan": plan}, 400)
-            return _json({"sent": bool(result.accepted), "dry_run": False,
-                          "order": {"id": result.venue_order_id, "message": result.message},
-                          "plan": plan, "recommendation": rec.to_dict()})
-        return _json({"sent": False, "dry_run": True, "plan": plan,
+            return _json({
+                "sent": True, "dry_run": False, "venue": "bitunix",
+                "order": {"id": placed["order_id"], "message": placed.get("message") or ""},
+                "plan": plan, "recommendation": rec.to_dict(),
+                "qty": placed.get("qty"),
+            })
+        return _json({"sent": False, "dry_run": True, "venue": "bitunix", "plan": plan,
                       "proposal": proposal.to_dict(), "recommendation": rec.to_dict(),
-                      "hint": "On your desk. Not sent to Binance."})
+                      "hint": "Paper ticket. Connect Bitunix and tick Send live to place it."})
     if path == "/api/signals" and method == "GET":
         return _json({"signals": list_signals()})
     if path == "/api/signals" and method == "POST":
@@ -237,7 +252,7 @@ def dispatch(method: str, path: str, query: dict, body: dict):
         if item is None and body.get("message") and not isinstance(body.get("message"), dict):
             item = ingest(str(body.get("message")), source="telegram")
         return _json({"ok": True, "item": item})
-    if path not in ("/api/health", "/api/hackathon", "/api/tools", "/api/demo",
+    if path not in ("/api/health", "/api/account", "/api/hackathon", "/api/tools", "/api/demo",
                     "/api/briefing", "/api/cycle", "/api/signal", "/api/inbox",
                     "/api/recommend", "/api/execute", "/api/telegram", "/api/signals"):
         return _json({"error": "not found"}, 404)

@@ -14,8 +14,9 @@ let selectedPlan = "mid";
 let currentRec = null;
 let selectedSignal = null;
 const isAdmin = document.documentElement.classList.contains("is-admin");
-const KEYS = "fxg.binance";
+const KEYS = "fxg.bitunix";
 const BOOK = "fxg.book";
+let deskBitunix = false;
 
 function money(n) {
   const v = Number(n) || 0;
@@ -24,7 +25,9 @@ function money(n) {
 
 function userKeys() {
   try {
-    return JSON.parse(localStorage.getItem(KEYS) || "{}");
+    const fresh = JSON.parse(localStorage.getItem(KEYS) || "null");
+    if (fresh && typeof fresh === "object") return fresh;
+    return JSON.parse(localStorage.getItem("fxg.binance") || "{}");
   } catch (_err) {
     return {};
   }
@@ -32,7 +35,7 @@ function userKeys() {
 
 function hasUserKeys() {
   const k = userKeys();
-  return !!(k.api_key && k.secret);
+  return !!(k.api_key && k.secret) || deskBitunix;
 }
 
 function loadBook() {
@@ -61,7 +64,7 @@ function renderBook() {
   bookEl.innerHTML = rows.map((t) => `
     <div class="item">
       <div class="pair">${t.direction || ""} ${t.symbol || ""} <span class="tag">${t.plan || ""}</span></div>
-      <div class="meta">${t.leverage || ""}x · SL ${t.stop} · TP ${t.take_profit} · ${t.at || ""}</div>
+      <div class="meta">${t.venue || "paper"} · ${t.leverage || ""}x · SL ${t.stop} · TP ${t.take_profit} · ${t.at || ""}</div>
     </div>
   `).join("");
 }
@@ -171,7 +174,15 @@ function renderPlans(rec) {
   const chosen = plans.find((p) => p.id === selectedPlan);
   takeBtn.disabled = !chosen || !chosen.policy_ok;
   const tone = chosen && ({ daredevil: "Max", high: "Bold", mid: "Normal", low: "Easy" }[chosen.id] || chosen.label);
-  takeBtn.textContent = chosen ? "Take " + tone : "Take trade";
+  const live = wantLiveSend();
+  takeBtn.textContent = chosen
+    ? (live ? "Send " + tone + " to Bitunix" : "Take " + tone)
+    : "Take trade";
+}
+
+function wantLiveSend() {
+  const sendBox = document.getElementById("send-live");
+  return !!(isAdmin && sendBox && sendBox.checked && hasUserKeys());
 }
 
 function recFromSignal(s) {
@@ -235,10 +246,9 @@ async function loadRecommend(message, mark) {
 }
 
 async function execute(message, plan, details) {
-  const sendBox = document.getElementById("send-live");
   const keys = isAdmin ? userKeys() : {};
-  const wantLive = !!(isAdmin && sendBox && sendBox.checked && keys.api_key);
-  msgEl.textContent = "Taking…";
+  const wantLive = wantLiveSend();
+  msgEl.textContent = wantLive ? "Sending to Bitunix…" : "Taking…";
   try {
     const data = await post("/api/execute", {
       message,
@@ -251,16 +261,23 @@ async function execute(message, plan, details) {
     });
     const p = data.plan;
     const rec = data.recommendation || {};
+    const symbol = rec.bitunix_symbol || rec.binance_symbol || "";
     saveFill({
       direction: rec.direction,
-      symbol: rec.binance_symbol,
+      symbol,
       plan: p.label,
       leverage: p.leverage,
       stop: p.stop,
       take_profit: p.take_profit,
+      venue: data.sent ? "bitunix" : "paper",
       at: new Date().toISOString().slice(11, 16) + " UTC",
     });
-    msgEl.textContent = `${p.label} taken on your desk. ${p.leverage}x ${rec.binance_symbol || ""}. SL ${p.stop} TP ${p.take_profit}.`;
+    if (data.sent) {
+      const oid = data.order && data.order.id ? ` Order ${data.order.id}.` : "";
+      msgEl.textContent = `${p.label} sent to Bitunix. ${p.leverage}x ${symbol}. SL ${p.stop} TP ${p.take_profit}.${oid}`;
+    } else {
+      msgEl.textContent = `${p.label} paper ticket. ${p.leverage}x ${symbol}. SL ${p.stop} TP ${p.take_profit}. Connect Bitunix + Send live to place it.`;
+    }
   } catch (err) {
     msgEl.textContent = err.message;
   }
@@ -374,20 +391,44 @@ function fillChats(data) {
 
 function paintKeysButton() {
   const btn = document.getElementById("btn-keys");
-  btn.textContent = hasUserKeys() ? "Binance connected" : "Connect Binance";
+  if (btn) btn.textContent = hasUserKeys() ? "Bitunix connected" : "Connect Bitunix";
+  const pill = document.getElementById("bx-status");
+  if (pill) {
+    pill.textContent = hasUserKeys() ? "bitunix: ready" : "bitunix";
+    pill.classList.toggle("ok", hasUserKeys());
+  }
+  const hint = document.getElementById("book-hint");
+  if (hint) {
+    hint.textContent = wantLiveSend()
+      ? "Take sends the selected risk to your Bitunix futures account."
+      : "Paper until you connect Bitunix and tick Send live.";
+  }
+  if (currentRec) {
+    const plans = currentRec.plans || [];
+    const chosen = plans.find((p) => p.id === selectedPlan);
+    const tone = chosen && ({ daredevil: "Max", high: "Bold", mid: "Normal", low: "Easy" }[chosen.id] || chosen.label);
+    if (takeBtn && chosen) takeBtn.textContent = wantLiveSend() ? "Send " + tone + " to Bitunix" : "Take " + tone;
+  }
 }
 
 async function boot() {
   renderBook();
-  paintKeysButton();
   const savedEq = userKeys().equity;
   if (savedEq) equityEl.value = savedEq;
   document.getElementById("user-key").value = userKeys().api_key || "";
   document.getElementById("user-secret").value = userKeys().secret || "";
   document.getElementById("send-live").checked = !!userKeys().live;
   try {
-    await get("/api/health");
+    const health = await get("/api/health");
+    deskBitunix = !!(health && health.bitunix && health.live_allowed);
   } catch (_err) {}
+  paintKeysButton();
+  if (isAdmin && hasUserKeys()) {
+    try {
+      const acc = await get("/api/account");
+      if (acc && acc.equity) equityEl.value = Math.max(10, Math.round(acc.equity));
+    } catch (_err) {}
+  }
   let box = { signals: [] };
   try {
     box = await refreshInbox();
@@ -427,18 +468,37 @@ document.getElementById("btn-take").onclick = () => {
 };
 
 document.getElementById("btn-keys").onclick = () => keysDlg.showModal();
-document.getElementById("keys-form").addEventListener("submit", (ev) => {
+document.getElementById("keys-form").addEventListener("submit", async (ev) => {
   if (ev.submitter && ev.submitter.id === "btn-save-keys") {
+    const api_key = document.getElementById("user-key").value.trim();
+    const secret = document.getElementById("user-secret").value.trim();
     localStorage.setItem(KEYS, JSON.stringify({
-      api_key: document.getElementById("user-key").value.trim(),
-      secret: document.getElementById("user-secret").value.trim(),
+      api_key,
+      secret,
       equity: Number(equityEl.value) || 1000,
       live: document.getElementById("send-live").checked,
     }));
     paintKeysButton();
+    if (api_key && secret) {
+      try {
+        const acc = await post("/api/account", { api_key, secret });
+        if (acc && acc.equity) equityEl.value = Math.max(10, Math.round(acc.equity));
+        msgEl.textContent = acc.available != null
+          ? `Bitunix connected. ${acc.available} USDT free.`
+          : "Bitunix keys saved.";
+      } catch (err) {
+        msgEl.textContent = "Keys saved, but Bitunix said: " + err.message;
+      }
+    }
     if (currentRec) renderPlans(currentRec);
   }
 });
+document.getElementById("send-live").onchange = () => {
+  const k = userKeys();
+  k.live = document.getElementById("send-live").checked;
+  localStorage.setItem(KEYS, JSON.stringify(k));
+  paintKeysButton();
+};
 
 equityEl.onchange = () => {
   const k = userKeys();
