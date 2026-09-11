@@ -661,14 +661,17 @@ class Bitunix(Venue):
                            raw=data if isinstance(data, dict) else {})
 
     def close(self, position: Position, *, reason: str = "") -> OrderResult:
-        """Flatten a position with a reduce-only market order in the other direction."""
-        instrument = self.instruments().get(position.symbol)
-        qty = instrument.round_qty(position.qty) if instrument else Decimal(str(position.qty))
-        return self.place(OrderRequest(
-            symbol=position.symbol,
-            direction=SHORT if position.direction == LONG else LONG,
-            qty=qty,
-            reduce_only=True,
-            client_id=f"close-{position.venue_id}" if position.venue_id else "",
-            reason=reason,
-        ))
+        """Flatten via flash close. Hedge close needs positionId, not a reverse order."""
+        if not position.venue_id:
+            raise VenueError("bitunix", "no-position-id",
+                             f"cannot close {position.symbol} without a positionId")
+        data = self._request(
+            "POST", "/api/v1/futures/trade/flash_close_position",
+            payload={"positionId": position.venue_id},
+            private=True,
+        )
+        return OrderResult(
+            accepted=True,
+            venue_order_id=str((data or {}).get("positionId", position.venue_id)),
+            raw=data if isinstance(data, dict) else {},
+        )

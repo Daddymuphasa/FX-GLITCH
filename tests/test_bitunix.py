@@ -424,14 +424,14 @@ class TestOrders(unittest.TestCase):
         self.assertEqual(body["marginCoin"], "USDT")
         self.assertEqual(body["leverage"], 8)
 
-    def test_close_sends_a_reduce_only_order_the_other_way(self):
-        c = self.order_client(self.HEDGE)
+    def test_close_uses_flash_close_with_position_id(self):
+        c = self.order_client()
         c.close(Position("BTCUSDT", LONG, 0.05, 60000.0, venue_id="p1"))
-        body = self.sent_body(c)
-        self.assertEqual(body["side"], "SELL")
-        self.assertTrue(body["reduceOnly"])
-        self.assertEqual(body["tradeSide"], "CLOSE")
-        self.assertEqual(body["qty"], "0.0500")
+        call = [x for x in c._transport.calls if "flash_close" in x["url"]][-1]
+        import json
+        body = json.loads(call["body"])
+        self.assertEqual(call["method"], "POST")
+        self.assertEqual(body["positionId"], "p1")
 
 
 class TestPositions(unittest.TestCase):
