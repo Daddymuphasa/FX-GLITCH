@@ -12,3 +12,6 @@ pillow>=10.0
 
 # Passkey (WebAuthn) accounts on the desk
 webauthn>=2.2
+
+# WhatsApp linked-device agent
+piwapp>=0.1.1

@@ -28,6 +28,11 @@ data/live_state.json
 data/inbox.json
 data/auth.json
 data/books/
+data/session.secret
+data/whatsapp_auth.json
+data/whatsapp_auth.json.keys
+data/whatsapp.db
+data/whatsapp_users.json
 data/telegram.session
 data/telegram.session-journal
 data/telegram_watch.json

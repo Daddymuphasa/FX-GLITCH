@@ -184,7 +184,18 @@ function applySession(me) {
   document.documentElement.classList.toggle("is-admin", isAdmin);
   if (signedIn) document.documentElement.classList.remove("is-peek");
   const who = document.getElementById("who");
-  if (who) who.textContent = signedIn ? (meName + (isAdmin ? " · operator" : "")) : "";
+  const acct = me && me.account ? " · acct " + me.account : "";
+  if (who) who.textContent = signedIn ? (meName + acct + (isAdmin ? " · operator" : "")) : "";
+  if (me && me.account) {
+    selectedAccount = me.account;
+    const sel = document.getElementById("bx-account");
+    if (sel) {
+      sel.value = String(me.account);
+      sel.disabled = !isAdmin;
+    }
+    const live = document.getElementById("send-live");
+    if (live && me.via === "access") live.checked = true;
+  }
 }
 
 async function refreshBook() {
@@ -708,6 +719,36 @@ function startQrPoll() {
   }, 2000);
 }
 
+function paintWa(snap) {
+  const pill = document.getElementById("wa-pill");
+  const box = document.getElementById("wa-qr");
+  const status = document.getElementById("wa-status");
+  if (pill) {
+    pill.textContent = "whatsapp: " + (snap.status || "");
+    pill.classList.toggle("ok", snap.status === "linked");
+    pill.classList.toggle("warn", snap.status === "need_scan");
+  }
+  if (box) {
+    if (snap.qr) box.innerHTML = `<img alt="WhatsApp QR" src="${snap.qr}" />`;
+    else if (snap.status === "linked") box.textContent = "Linked";
+    else box.textContent = snap.error || "QR";
+  }
+  if (status) {
+    if (snap.status === "linked") status.textContent = "WhatsApp linked as " + (snap.me || "device") + ". Users text this number with their access code.";
+    else if (snap.status === "need_scan") status.textContent = "Scan this QR: WhatsApp → Settings → Linked devices → Link a device.";
+    else if (snap.status === "need_library") status.textContent = "Run: pip install piwapp";
+    else if (snap.status === "vercel") status.textContent = "Link WhatsApp on the local desk, not on the public site.";
+    else status.textContent = snap.error || ("WhatsApp: " + (snap.status || "idle"));
+  }
+}
+
+document.getElementById("btn-wa-qr").onclick = async () => {
+  try { paintWa(await get("/api/whatsapp?action=qr")); } catch (err) {
+    const status = document.getElementById("wa-status");
+    if (status) status.textContent = err.message;
+  }
+};
+
 document.getElementById("btn-qr").onclick = async () => {
   document.getElementById("qr-status").textContent = "Minting a fresh QR…";
   renderAccount(await get("/api/telegram?action=qr"));
@@ -759,6 +800,23 @@ document.getElementById("btn-watch").onclick = async () => {
   }));
 };
 
+async function enterDesk() {
+  const code = (document.getElementById("access-code").value || "").trim();
+  gateMsg("Checking…");
+  try {
+    const me = await post("/api/auth/code", { code });
+    applySession(me);
+    gateMsg("");
+    await afterLogin();
+  } catch (err) {
+    gateMsg(err.message || String(err));
+  }
+}
+
+document.getElementById("btn-code").onclick = enterDesk;
+document.getElementById("access-code").addEventListener("keydown", (ev) => {
+  if (ev.key === "Enter") enterDesk();
+});
 document.getElementById("btn-register").onclick = createPasskey;
 document.getElementById("btn-login").onclick = signInPasskey;
 document.getElementById("btn-peek").onclick = () => {

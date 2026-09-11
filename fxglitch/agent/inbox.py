@@ -115,6 +115,11 @@ def publish_live() -> list[dict]:
     except OSError:
         pass
     push_to_host(good)
+    try:
+        from .whatsapp_user import bridge as wa_bridge
+        wa_bridge.notify_signals(good)
+    except Exception:
+        pass
     return good
 
 

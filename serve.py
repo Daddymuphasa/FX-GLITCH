@@ -18,6 +18,7 @@ NEEDED = (
     ("qrcode", "qrcode"),
     ("PIL", "pillow"),
     ("webauthn", "webauthn"),
+    ("piwapp", "piwapp"),
 )
 
 
@@ -80,6 +81,7 @@ def main() -> None:
 
     from fxglitch.agent.http_api import Handler
     from fxglitch.agent.telegram_user import bridge
+    from fxglitch.agent.whatsapp_user import bridge as wa_bridge
 
     if _port_open("127.0.0.1", args.port) or (args.host not in ("0.0.0.0", "::") and _port_open(args.host, args.port)):
         print(f"FX-GLITCH already running at {url}")
@@ -90,10 +92,11 @@ def main() -> None:
     public = os.path.join(ROOT, "public")
     Handler.web_root = public if os.path.isdir(public) else os.path.join(ROOT, "web")
     bridge.start()
+    wa_bridge.start()
     httpd = ThreadingHTTPServer((args.host, args.port), Handler)
     print(f"FX-GLITCH Agent OS  {url}")
-    print("Open http://localhost:%s for passkeys (not 127.0.0.1)." % args.port)
-    print("Telegram QR login and group watch run in this process.")
+    print("Open http://localhost:%s  (passkeys need localhost, not 127.0.0.1)" % args.port)
+    print("Telegram + WhatsApp QR login run in this process.")
     print("dry-run by default. MCP: python -m fxglitch.agent.mcp_server")
     if want_open:
         webbrowser.open(url)

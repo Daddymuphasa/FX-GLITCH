@@ -192,38 +192,58 @@ def _env(name: str) -> str:
     return (os.environ.get(name) or "").strip()
 
 
-def slot_credentials(slot: int = 1) -> tuple[str, str, str]:
-    """API key, secret, display name for Bitunix account 1 or 2. Never log these."""
+SLOTS = (1, 2, 3)
+
+
+def _slot_n(slot) -> int:
     try:
         slot = int(slot)
     except (TypeError, ValueError):
         slot = 1
-    if slot not in (1, 2):
-        slot = 1
+    return slot if slot in SLOTS else 1
+
+
+def slot_credentials(slot: int = 1) -> tuple[str, str, str]:
+    """API key, secret, display name for Bitunix account 1–3. Never log these."""
+    slot = _slot_n(slot)
     if slot == 1:
         key = _env("BITUNIX_API_KEY") or _env("BITUNIX_API_KEY_1")
         secret = _env("BITUNIX_SECRET_KEY") or _env("BITUNIX_SECRET_KEY_1")
         name = _env("BITUNIX_NAME") or _env("BITUNIX_NAME_1") or "account-1"
     else:
-        key = _env("BITUNIX_API_KEY_2")
-        secret = _env("BITUNIX_SECRET_KEY_2")
-        name = _env("BITUNIX_NAME_2") or "account-2"
+        key = _env(f"BITUNIX_API_KEY_{slot}")
+        secret = _env(f"BITUNIX_SECRET_KEY_{slot}")
+        name = _env(f"BITUNIX_NAME_{slot}") or f"account-{slot}"
     return key, secret, name
 
 
+def access_code(slot: int = 1) -> str:
+    slot = _slot_n(slot)
+    if slot == 1:
+        return _env("BITUNIX_ACCESS") or _env("BITUNIX_ACCESS_1")
+    return _env(f"BITUNIX_ACCESS_{slot}")
+
+
 def listed_accounts() -> list[dict]:
-    """Ready flags only — no key material."""
+    """Ready flags only — no key material, no access codes."""
     rows = []
-    for slot in (1, 2):
+    for slot in SLOTS:
         key, secret, name = slot_credentials(slot)
-        rows.append({"id": slot, "name": name, "ready": bool(key and secret)})
+        rows.append({
+            "id": slot,
+            "name": name,
+            "ready": bool(key and secret),
+            "has_access": bool(access_code(slot)),
+            "coming_soon": slot == 3 and not (key and secret),
+        })
     return rows
 
 
 def from_slot(slot: int = 1) -> "Bitunix":
+    slot = _slot_n(slot)
     key, secret, name = slot_credentials(slot)
     client = Bitunix(api_key=key, secret_key=secret)
-    client.account_id = 1 if slot not in (1, 2) else int(slot)
+    client.account_id = slot
     client.account_name = name
     return client
 

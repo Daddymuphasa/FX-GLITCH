@@ -385,6 +385,16 @@ html.is-peek .gate { display: none; }
   cursor: pointer;
   font-size: 13px;
 }
+.more-login { margin-top: 16px; color: var(--muted); font-size: 12px; }
+.more-login summary { cursor: pointer; }
+.subhead {
+  font-family: "Rajdhani", sans-serif;
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--steel);
+  margin: 12px 0 6px;
+}
 .take-bar.user-only { }
 
 @media (max-width: 860px) {

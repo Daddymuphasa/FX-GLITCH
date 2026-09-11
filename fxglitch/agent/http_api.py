@@ -11,7 +11,9 @@ from urllib.parse import parse_qs, urlparse
 from ..venues.binance import Binance
 from ..venues.bitunix import Bitunix, from_slot, listed_accounts
 from ..venues.base import VenueError
+from . import access as access_codes
 from . import auth as passkeys
+from .whatsapp_user import bridge as wa_bridge
 from .inbox import ingest, list_signals, publish_live, replace_signals
 from .mcp_server import TOOLS
 from .plans import place_plan, plan_by_id, proposal_from_plan, recommend
@@ -58,7 +60,7 @@ def _slot(value) -> int:
         slot = int(value)
     except (TypeError, ValueError):
         slot = 1
-    return slot if slot in (1, 2) else 1
+    return slot if slot in (1, 2, 3) else 1
 
 
 def _bitunix(slot: int = 1) -> Bitunix:
@@ -128,11 +130,46 @@ def _auth_error(exc: Exception, status: int = 400):
     return _json({"error": str(exc)}, status)
 
 
+def _who(headers: dict) -> dict | None:
+    user = access_codes.current_user(headers)
+    if user:
+        return user
+    pk = passkeys.current_user(headers)
+    if not pk:
+        return None
+    out = passkeys.public_user(pk)
+    out["account"] = 1 if out.get("admin") else None
+    out["via"] = "passkey"
+    return out
+
+
 def dispatch(method: str, path: str, query: dict, body: dict, headers: dict | None = None):
     headers = headers or {}
-    user = passkeys.current_user(headers)
+    user = _who(headers)
     if path == "/api/me":
-        return _json(passkeys.public_user(user))
+        return _json(user or {"signed_in": False, "admin": False})
+    if path == "/api/auth/code" and method == "POST":
+        found = access_codes.unlock(str(body.get("code") or body.get("password") or ""))
+        if not found:
+            return _json({"error": "That access code does not match an account."}, 401)
+        token = access_codes.mint(found)
+        origin = passkeys.origin_for(headers, _host(headers))
+        extra = {"Set-Cookie": access_codes.cookie_header(token, secure=origin.startswith("https"))}
+        return (*_json(found), extra)
+    if path == "/api/auth/logout" and method == "POST":
+        passkeys.logout(headers)
+        origin = passkeys.origin_for(headers, _host(headers))
+        extra = {
+            "Set-Cookie": passkeys.cookie_header("", clear=True, secure=origin.startswith("https")),
+        }
+        # two cookies: clear both
+        extra = {
+            "Set-Cookie": [
+                passkeys.cookie_header("", clear=True, secure=origin.startswith("https")),
+                access_codes.cookie_header("", clear=True, secure=origin.startswith("https")),
+            ]
+        }
+        return (*_json({"ok": True, "signed_in": False}), extra)
     if path == "/api/auth/register" and method == "POST":
         action = body.get("action") or "begin"
         try:
@@ -155,9 +192,6 @@ def dispatch(method: str, path: str, query: dict, body: dict, headers: dict | No
             return (*_json(user_out), _cookie_headers(token, headers))
         except Exception as exc:
             return _auth_error(exc)
-    if path == "/api/auth/logout" and method == "POST":
-        passkeys.logout(headers)
-        return (*_json({"ok": True, "signed_in": False}), _cookie_headers("", headers, clear=True))
     if path == "/api/book" and method == "GET":
         if not user:
             return _json({"error": "Unlock with your passkey first.", "signals": []}, 401)
@@ -254,8 +288,12 @@ def dispatch(method: str, path: str, query: dict, body: dict, headers: dict | No
         plan_id = body.get("plan") or "mid"
         if not message:
             return _json({"error": "message is required"}, 400)
+        if not user:
+            return _json({"error": "Enter your access code to take a trade."}, 401)
         equity = float(body.get("equity") or 1000)
-        slot = _slot(body.get("account"))
+        slot = _slot(user.get("account") or body.get("account"))
+        if user.get("account") and not user.get("admin"):
+            slot = _slot(user.get("account"))
         venue = _bitunix(slot)
         instruments, mark, balance = _context(None, slot)
         rec = recommend(message, equity=equity, mark=mark, instruments=instruments, balance=balance)
@@ -270,14 +308,12 @@ def dispatch(method: str, path: str, query: dict, body: dict, headers: dict | No
         if not plan["policy_ok"]:
             return _json({"error": plan["policy_reason"], "recommendation": rec.to_dict()}, 400)
         proposal = proposal_from_plan(rec, plan)
-        if not user:
-            return _json({"error": "Unlock with your passkey to take a trade."}, 401)
         want_live = bool(body.get("live")) and bool(body.get("confirm"))
-        if want_live and not user.get("admin"):
+        if want_live and not (user.get("admin") or user.get("account")):
             want_live = False
-        if want_live and os.environ.get("VERCEL"):
+        if want_live and os.environ.get("VERCEL") and not user.get("account"):
             return _json({
-                "error": "Live Bitunix sends from the local desk (localhost), not from the public site.",
+                "error": "Live Bitunix needs an access code on this site.",
                 "dry_run": True,
                 "plan": plan,
             }, 400)
@@ -342,10 +378,22 @@ def dispatch(method: str, path: str, query: dict, body: dict, headers: dict | No
             result["account"] = bridge.snapshot()
             return _json(result)
         return _json(bridge.snapshot())
-    if path == "/api/telegram" and method == "POST":
+    if path == "/api/whatsapp" and method == "GET":
+        if not user or not user.get("admin"):
+            return _json({"status": "signed_out", "error": "operator only"}, 401)
+        action = (query.get("action") or ["status"])[0]
+        if action == "qr":
+            return _json(wa_bridge.ensure_qr())
+        return _json(wa_bridge.snapshot())
+    if path == "/api/whatsapp" and method == "POST":
         if not user or not user.get("admin"):
             return _json({"error": "operator only"}, 401)
+        return _json(wa_bridge.ensure_qr())
+    if path == "/api/telegram" and method == "POST":
         action = body.get("action")
+        if action in ("watch", "password", "qr"):
+            if not user or not user.get("admin"):
+                return _json({"error": "operator only"}, 401)
         if action == "watch":
             return _json(bridge.set_watch(str(body.get("chat_id") or ""), body.get("title") or ""))
         if action == "password":
@@ -360,7 +408,7 @@ def dispatch(method: str, path: str, query: dict, body: dict, headers: dict | No
             item = ingest(str(body.get("message")), source="telegram")
         return _json({"ok": True, "item": item})
     if path not in ("/api/health", "/api/me", "/api/book", "/api/auth/register", "/api/auth/login",
-                    "/api/auth/logout", "/api/account", "/api/hackathon", "/api/tools", "/api/demo",
+                    "/api/auth/logout", "/api/auth/code", "/api/whatsapp", "/api/account", "/api/hackathon", "/api/tools", "/api/demo",
                     "/api/briefing", "/api/cycle", "/api/signal", "/api/inbox",
                     "/api/recommend", "/api/execute", "/api/telegram", "/api/signals"):
         return _json({"error": "not found"}, 404)

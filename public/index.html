@@ -19,12 +19,17 @@
     <div class="glass gate-card">
       <p class="eyebrow">Your desk</p>
       <h1>FX-GLITCH</h1>
-      <p class="hint">Unlock your account with a passkey — Windows Hello, Face ID, fingerprint, or your phone. No password. Exchange keys never leave the server.</p>
-      <label>Name <input id="pass-name" type="text" maxlength="32" autocomplete="username" placeholder="Your name" /></label>
-      <button id="btn-register" class="primary" type="button">Create passkey</button>
-      <button id="btn-login" type="button">I already have a passkey</button>
+      <p class="hint">Type your access code. It opens Bitunix account 1, 2, or 3. The API keys never leave the server.</p>
+      <label>Access code <input id="access-code" type="password" autocomplete="current-password" placeholder="Your code" /></label>
+      <button id="btn-code" class="primary" type="button">Enter desk</button>
       <p id="gate-msg" class="hint banner"></p>
       <button id="btn-peek" class="linkish" type="button">Just look at setups</button>
+      <details class="more-login">
+        <summary>Operator passkey</summary>
+        <label>Name <input id="pass-name" type="text" maxlength="32" autocomplete="username" placeholder="Your name" /></label>
+        <button id="btn-register" type="button">Create passkey</button>
+        <button id="btn-login" type="button">I already have a passkey</button>
+      </details>
     </div>
   </div>
 
@@ -41,15 +46,22 @@
         <span id="who" class="who user-only"></span>
         <button id="btn-keys" class="admin-only" type="button">Bitunix · .env</button>
         <button id="btn-out" class="user-only" type="button">Sign out</button>
-        <button id="btn-in" class="guest-only" type="button">Passkey</button>
+        <button id="btn-in" class="guest-only" type="button">Access code</button>
       </div>
     </header>
 
     <section class="glass admin-desk admin-only" id="admin-desk">
       <div class="panel-head">
-        <h2>Admin · Telegram</h2>
+        <h2>Admin · links</h2>
         <button id="btn-scan" type="button">Scan last 3 days</button>
       </div>
+      <div class="panel-head">
+        <h3 class="subhead">WhatsApp agent</h3>
+        <button id="btn-wa-qr" type="button">Show WhatsApp QR</button>
+      </div>
+      <p id="wa-status" class="hint">WhatsApp → Settings → Linked devices → Link a device. Users text this number: access code, then signals / take / easy-normal-bold-max.</p>
+      <span class="pill admin-only" id="wa-pill">whatsapp</span>
+      <div class="qr-box" id="wa-qr">QR</div>
       <p id="qr-status" class="hint">Scan here on this PC. Telegram → Settings → Devices → Link Desktop Device.</p>
       <span class="pill admin-only" id="tg-status">telegram</span>
       <span class="pill admin-only" id="bx-status">bitunix</span>
