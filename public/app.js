@@ -108,9 +108,18 @@ function renderBook(rows) {
 
 function setFlow(_n) {}
 
+async function readJson(res) {
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch (_err) {
+    throw new Error("This host has no login API yet. Wait for deploy, or use http://localhost:8765");
+  }
+}
+
 async function get(url) {
   const res = await fetch(url, { credentials: "include" });
-  const data = await res.json();
+  const data = await readJson(res);
   if (!res.ok) throw new Error(data.error || res.statusText);
   return data;
 }
@@ -122,7 +131,7 @@ async function post(url, body) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body || {}),
   });
-  const data = await res.json();
+  const data = await readJson(res);
   if (!res.ok) throw new Error(data.error || res.statusText);
   return data;
 }

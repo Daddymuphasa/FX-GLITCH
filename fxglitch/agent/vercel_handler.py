@@ -8,6 +8,13 @@ from urllib.parse import parse_qs, urlparse
 
 from .http_api import dispatch
 
+PATH_ALIASES = {
+    "/api/auth_code": "/api/auth/code",
+    "/api/auth_logout": "/api/auth/logout",
+    "/api/auth_login": "/api/auth/login",
+    "/api/auth_register": "/api/auth/register",
+}
+
 
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -36,8 +43,9 @@ class handler(BaseHTTPRequestHandler):
                 payload = json.loads(raw.decode() or "{}")
             except json.JSONDecodeError:
                 payload = {}
+        path = PATH_ALIASES.get(parsed.path, parsed.path)
         result = dispatch(
-            method, parsed.path, parse_qs(parsed.query), payload, dict(self.headers)
+            method, path, parse_qs(parsed.query), payload, dict(self.headers)
         )
         status, content_type, body, *rest = result
         extra = rest[0] if rest else {}
