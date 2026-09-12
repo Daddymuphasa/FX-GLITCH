@@ -612,7 +612,9 @@ function paintKeysButton() {
 async function boot() {
   wipeBrowserKeys();
   try {
-    applySession(await get("/api/me"));
+    const health = await get("/api/health");
+    applySession(health.me || { signed_in: false });
+    fillAccounts(health.bitunix_accounts);
   } catch (_err) {
     applySession({ signed_in: false });
   }
@@ -813,7 +815,7 @@ async function enterDesk() {
   const code = (document.getElementById("access-code").value || "").trim();
   gateMsg("Checking…");
   try {
-    const me = await post("/api/auth/code", { code });
+    const me = await post("/api/health", { code });
     applySession(me);
     gateMsg("");
     await afterLogin();
@@ -835,7 +837,7 @@ document.getElementById("btn-in").onclick = () => {
   document.documentElement.classList.remove("is-peek");
 };
 document.getElementById("btn-out").onclick = async () => {
-  try { await post("/api/auth/logout", {}); } catch (_err) {}
+  try { await post("/api/health", { logout: true }); } catch (_err) {}
   applySession({ signed_in: false });
 };
 

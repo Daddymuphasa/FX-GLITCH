@@ -1,3 +1,4 @@
+import json
 import os
 import unittest
 
@@ -40,6 +41,18 @@ class TestAccessCodes(unittest.TestCase):
         back = access.read_token(token)
         self.assertEqual(back["account"], 2)
         self.assertEqual(back["name"], "second")
+
+    def test_health_post_logs_in(self):
+        os.environ["BITUNIX_ACCESS_2"] = "bravo"
+        os.environ["BITUNIX_NAME_2"] = "second"
+        from fxglitch.agent.http_api import dispatch
+        status, ctype, body, extra = dispatch(
+            "POST", "/api/health", {}, {"code": "bravo"}, {"Host": "localhost:8765"}
+        )
+        self.assertEqual(status, 200)
+        payload = json.loads(body)
+        self.assertEqual(payload["account"], 2)
+        self.assertIn("Set-Cookie", extra)
 
     def test_account_three_is_listed(self):
         rows = listed_accounts()

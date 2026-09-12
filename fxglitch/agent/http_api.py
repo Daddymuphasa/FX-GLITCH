@@ -203,6 +203,21 @@ def dispatch(method: str, path: str, query: dict, body: dict, headers: dict | No
         rows = passkeys.save_fill(user["id"], fill)
         return _json({"ok": True, "fills": rows})
     if path == "/api/health":
+        if method == "POST" and (body.get("code") or body.get("password") or body.get("logout")):
+            if body.get("logout"):
+                origin = passkeys.origin_for(headers, _host(headers))
+                extra = {"Set-Cookie": [
+                    passkeys.cookie_header("", clear=True, secure=origin.startswith("https")),
+                    access_codes.cookie_header("", clear=True, secure=origin.startswith("https")),
+                ]}
+                return (*_json({"ok": True, "signed_in": False}), extra)
+            found = access_codes.unlock(str(body.get("code") or body.get("password") or ""))
+            if not found:
+                return _json({"error": "That access code does not match an account."}, 401)
+            token = access_codes.mint(found)
+            origin = passkeys.origin_for(headers, _host(headers))
+            extra = {"Set-Cookie": access_codes.cookie_header(token, secure=origin.startswith("https"))}
+            return (*_json(found), extra)
         accounts = listed_accounts()
         live_ok = any(a["ready"] for a in accounts) and not os.environ.get("VERCEL")
         return _json({
@@ -215,6 +230,7 @@ def dispatch(method: str, path: str, query: dict, body: dict, headers: dict | No
             "venue": "bitunix",
             "live_allowed": live_ok,
             "user_keys_ok": True,
+            "me": user or {"signed_in": False, "admin": False},
         })
     if path == "/api/account":
         if not user or not user.get("admin"):
