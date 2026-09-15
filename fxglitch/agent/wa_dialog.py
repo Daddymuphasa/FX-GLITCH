@@ -122,14 +122,24 @@ def handle(session: dict, text: str) -> str:
     if not session.get("account"):
         user = unlock(msg)
         if user:
+            equity = 1000.0
+            try:
+                bal = from_slot(user["account"]).balance()
+                if bal.equity:
+                    equity = float(bal.equity)
+            except Exception:
+                pass
             session.update({
                 "account": user["account"],
                 "name": user["name"],
                 "admin": user.get("admin"),
+                "equity": equity,
                 "step": "home",
             })
             return (
-                f"In. {user['name']} (Bitunix account {user['account']}).\n\n"
+                f"Portfolio open: *{user['name']}* (Bitunix {user['account']}).\n"
+                f"Equity ~{equity:.2f} USDT. New group trades will ping you here.\n"
+                "Risk: *easy* / *normal* / *bold* / *max*.\n\n"
                 + format_signals()
             )
         if low in ("login", "log in", "signals", "take"):
