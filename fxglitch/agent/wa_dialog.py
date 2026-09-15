@@ -6,7 +6,7 @@ Pure functions. The WhatsApp socket only feeds text in and replies out.
 from __future__ import annotations
 
 from .access import unlock
-from .inbox import list_signals
+from .inbox import recent_signals
 from .plans import place_plan, plan_by_id, recommend
 from ..venues.base import VenueError
 from ..venues.bitunix import from_slot
@@ -39,7 +39,7 @@ HELP = (
 
 
 def _open_signals() -> list[dict]:
-    rows = [s for s in list_signals() if s.get("direction") and (s.get("bitunix_symbol") or s.get("binance_symbol"))]
+    rows = recent_signals(hours=4)
     out = []
     seen = set()
     for row in rows:
@@ -56,7 +56,7 @@ def _open_signals() -> list[dict]:
 def format_signals(rows: list[dict] | None = None) -> str:
     rows = rows if rows is not None else _open_signals()
     if not rows:
-        return "No open setups right now. I'll ping you when the group posts one."
+        return "No setups in the last 4 hours. I'll ping you when the group posts a new one."
     lines = ["Open now:"]
     for i, row in enumerate(rows, 1):
         side = (row.get("direction") or "").upper()

@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import os
 import tempfile
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from .plans import recommend
@@ -162,6 +162,30 @@ def list_signals() -> list[dict]:
         return stamp
 
     return sorted(rows, key=_key, reverse=True)
+
+
+def _row_time(row: dict) -> datetime | None:
+    stamp = str(row.get("posted_at") or row.get("received_at") or "").strip()
+    if not stamp:
+        return None
+    try:
+        return datetime.strptime(stamp.replace("Z", ""), "%Y-%m-%dT%H:%M:%S").replace(tzinfo=timezone.utc)
+    except ValueError:
+        return None
+
+
+def recent_signals(hours: float = 4) -> list[dict]:
+    """Setups posted in the last N hours. Used for WhatsApp notify/take."""
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
+    out = []
+    for row in list_signals():
+        if not (row.get("direction") and (row.get("bitunix_symbol") or row.get("binance_symbol"))):
+            continue
+        when = _row_time(row)
+        if when is None or when < cutoff:
+            continue
+        out.append(row)
+    return out
 
 
 def ingest(message: str, *, source: str = "paste", telegram_id: str | None = None,
