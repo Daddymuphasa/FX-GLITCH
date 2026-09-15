@@ -1,0 +1,17 @@
+[Unit]
+Description=FX-GLITCH WhatsApp agent
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/fx-glitch/wa-link
+Environment=FXG_DESK=http://127.0.0.1:8765
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/node agent.mjs
+Restart=always
+RestartSec=5
+User=root
+
+[Install]
+WantedBy=multi-user.target
