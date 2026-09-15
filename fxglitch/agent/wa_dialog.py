@@ -31,6 +31,9 @@ HELP = (
     "• *1* / *2* / *3* — choose that setup\n"
     "• *easy* / *normal* / *bold* / *max* — risk\n"
     "• *yes* — send it on your Bitunix account\n"
+    "• *positions* — what is open now\n"
+    "• *close 1* — flatten that position\n"
+    "• *close all* — flatten everything\n"
     "• *logout*"
 )
 
@@ -76,6 +79,77 @@ def _pick_signal(session: dict, index: int, rows: list[dict]) -> str:
         f"Entry {row.get('entry')}  SL {row.get('stop')}\n"
         "How hard? Reply *easy*, *normal*, *bold*, or *max*."
     )
+
+
+def _positions(session: dict) -> list:
+    venue = from_slot(int(session.get("account") or 1))
+    if not venue.authenticated:
+        return []
+    return venue.positions()
+
+
+def format_positions(session: dict) -> str:
+    rows = _positions(session)
+    session["positions"] = [
+        {"symbol": p.symbol, "side": p.side, "qty": p.qty, "venue_id": p.venue_id,
+         "pnl": p.unrealised_pnl, "entry": p.entry_price}
+        for p in rows
+    ]
+    if not rows:
+        return "No open positions on this account."
+    lines = ["Open on Bitunix:"]
+    for i, p in enumerate(rows, 1):
+        pnl = p.unrealised_pnl
+        tag = f"{pnl:+.2f}" if pnl else "0"
+        lines.append(f"{i}. {p.side} {p.symbol}  qty {p.qty}  uPnL {tag}")
+    lines.append("Reply *close 1* (or the number) or *close all*.")
+    return "\n".join(lines)
+
+
+def _close_one(session: dict, index: int) -> str:
+    rows = session.get("positions") or []
+    if not rows:
+        format_positions(session)
+        rows = session.get("positions") or []
+    if index < 1 or index > len(rows):
+        return "That number is not on the list. Send *positions* first."
+    row = rows[index - 1]
+    venue = from_slot(int(session.get("account") or 1))
+    live = [p for p in venue.positions() if p.venue_id == row.get("venue_id") or (
+        p.symbol == row.get("symbol") and p.side == row.get("side"))]
+    if not live:
+        return f"{row.get('symbol')} is already flat."
+    try:
+        result = venue.close(live[0], reason="whatsapp close")
+    except VenueError as exc:
+        return f"Bitunix said no: {exc}"
+    session["step"] = "home"
+    return (
+        f"Closed {live[0].side} {live[0].symbol}.\n"
+        f"Order {result.venue_order_id or 'ok'}."
+    )
+
+
+def _close_all(session: dict) -> str:
+    venue = from_slot(int(session.get("account") or 1))
+    rows = venue.positions()
+    if not rows:
+        return "Already flat."
+    lines = []
+    for pos in rows:
+        try:
+            result = venue.close(pos, reason="whatsapp close all")
+            lines.append(f"Closed {pos.side} {pos.symbol} ({result.venue_order_id or 'ok'}).")
+        except VenueError as exc:
+            lines.append(f"{pos.symbol} failed: {exc}")
+    left = venue.positions()
+    if left:
+        lines.append("Still open: " + ", ".join(p.symbol for p in left))
+    else:
+        lines.append("Book is flat.")
+    session["step"] = "home"
+    session.pop("positions", None)
+    return "\n".join(lines)
 
 
 def _execute(session: dict, plan_id: str) -> str:
@@ -153,8 +227,26 @@ def handle(session: dict, text: str) -> str:
     if low == "take":
         session["step"] = "pick"
         return format_signals(rows)
+    if low in ("positions", "position", "book", "open positions"):
+        session["step"] = "close_pick"
+        return format_positions(session)
+    if low in ("close all", "flatten", "close everything"):
+        return _close_all(session)
+    if low.startswith("close "):
+        rest = low.split(" ", 1)[1].strip()
+        if rest in ("all", "everything"):
+            return _close_all(session)
+        if rest.isdigit():
+            return _close_one(session, int(rest))
+        session["step"] = "close_pick"
+        return format_positions(session)
+    if low == "close":
+        session["step"] = "close_pick"
+        return format_positions(session)
 
     if low.isdigit():
+        if session.get("step") == "close_pick":
+            return _close_one(session, int(low))
         return _pick_signal(session, int(low), rows)
 
     if low in PLAN_WORDS:
@@ -182,4 +274,4 @@ def handle(session: dict, text: str) -> str:
         session["step"] = "home"
         session.pop("plan", None)
         return "Cancelled. *signals* to see setups."
-    return "Send *signals*, a number, *easy/normal/bold/max*, or *help*."
+    return "Send *signals*, *positions*, *close 1*, *easy/normal/bold/max*, or *help*."

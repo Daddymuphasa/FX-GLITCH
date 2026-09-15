@@ -39,6 +39,26 @@ class TestWaDialog(unittest.TestCase):
         self.assertEqual(session["plan"], "mid")
         self.assertIn("yes", reply.lower())
 
+    def test_close_all_uses_venue(self):
+        session = {"account": 2, "name": "second"}
+        pos = type("P", (), {
+            "symbol": "BTCUSDT", "side": "LONG", "qty": 0.01,
+            "venue_id": "p1", "unrealised_pnl": 1.2, "entry_price": 100,
+        })()
+        venue = type("V", (), {})()
+        venue.authenticated = True
+        venue.positions = lambda: [pos]
+        closed = []
+        def close(p, reason=""):
+            closed.append(p.symbol)
+            venue.positions = lambda: []
+            return type("R", (), {"venue_order_id": "x", "message": ""})()
+        venue.close = close
+        with patch.object(wa_dialog, "from_slot", return_value=venue):
+            reply = wa_dialog.handle(session, "close all")
+        self.assertEqual(closed, ["BTCUSDT"])
+        self.assertIn("flat", reply.lower())
+
 
 if __name__ == "__main__":
     unittest.main()
