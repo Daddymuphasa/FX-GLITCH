@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FX-GLITCH · WhatsApp QR</title>
+  <link rel="stylesheet" href="/style.css" />
+  <style>
+    body { display: flex; min-height: 100vh; align-items: center; justify-content: center; padding: 24px; }
+    .card { width: min(440px, 100%); padding: 22px; }
+    .card img { width: 100%; background: #fff; border-radius: 12px; }
+    .qr-empty { min-height: 220px; display: flex; align-items: center; justify-content: center; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="glass card">
+    <p class="eyebrow">Linked devices</p>
+    <h1>WhatsApp QR</h1>
+    <p class="hint" id="status">Loading…</p>
+    <div id="box" class="qr-box qr-empty">QR</div>
+  </div>
+  <script>
+    async function tick() {
+      const status = document.getElementById("status");
+      const box = document.getElementById("box");
+      try {
+        const res = await fetch("/api/whatsapp?action=qr");
+        const d = await res.json();
+        if (d.qr) {
+          box.innerHTML = '<img alt="WhatsApp QR" src="' + d.qr + '" />';
+          status.textContent = "Scan now: WhatsApp → Settings → Linked devices → Link a device. Code refreshes.";
+          return;
+        }
+        if (d.status === "linked") {
+          box.textContent = "Linked";
+          status.textContent = "This desk is already linked as " + (d.me || "a device") + ".";
+          return;
+        }
+        const err = (d.error || "") + "";
+        box.textContent = d.status || "no QR";
+        if ((d.status === "connecting" || d.status === "error") && /405/.test(err + (d.status || ""))) {
+          status.textContent = "WhatsApp blocked this VPS (405). Link from a home PC, then we copy the session here.";
+        } else if (d.status === "connecting") {
+          status.textContent = "Waiting for WhatsApp. If this stays empty, the VPS IP is blocked for WhatsApp Web.";
+        } else {
+          status.textContent = err || ("Status: " + (d.status || "idle"));
+        }
+      } catch (e) {
+        status.textContent = e.message || String(e);
+      }
+    }
+    tick();
+    setInterval(tick, 3000);
+  </script>
+</body>
+</html>

@@ -21,6 +21,8 @@ AUTH = ROOT / "data" / "whatsapp_auth.json"
 KEYS = ROOT / "data" / "whatsapp_auth.json.keys"
 DB = ROOT / "data" / "whatsapp.db"
 USERS = ROOT / "data" / "whatsapp_users.json"
+QR_PNG = ROOT / "data" / "whatsapp_qr.png"
+DEBUG = ROOT / "data" / "wa_debug.log"
 
 
 def _qr_image(payload: str) -> str:
@@ -65,8 +67,12 @@ class WhatsAppBridge:
             return
         self._thread = threading.Thread(target=self._run_loop, name="wa-bridge", daemon=True)
         self._thread.start()
+        for _ in range(50):
+            if self._loop is not None:
+                break
+            threading.Event().wait(0.05)
         try:
-            self._call(self._boot(), timeout=20)
+            asyncio.run_coroutine_threadsafe(self._boot(), self._loop)
         except Exception as exc:
             self._error = str(exc)[:300]
             if self._status == "idle":
@@ -124,17 +130,47 @@ class WhatsAppBridge:
         client.events.on(WAEventType.MESSAGES_UPSERT, on_messages)
         self._client = client
         self._status = "connecting"
-        await client.start()
+        DEBUG.parent.mkdir(parents=True, exist_ok=True)
+        DEBUG.write_text("boot starting\n", encoding="utf-8")
+        try:
+            await client.start()
+        except Exception as exc:
+            self._status = "error"
+            self._error = str(exc)[:300]
+            DEBUG.write_text(DEBUG.read_text(encoding="utf-8") + f"start_fail {exc}\n", encoding="utf-8")
 
-    def _on_connection(self, update: dict) -> None:
+    def _on_connection(self, update) -> None:
+        if not isinstance(update, dict):
+            update = {
+                "qr": getattr(update, "qr", None),
+                "connection": getattr(update, "connection", None),
+                "me": getattr(update, "me", None),
+                "error": getattr(update, "error", None),
+            }
+        try:
+            DEBUG.parent.mkdir(parents=True, exist_ok=True)
+            with DEBUG.open("a", encoding="utf-8") as fh:
+                fh.write(repr(update)[:800] + "\n")
+        except OSError:
+            pass
         qr = update.get("qr")
         if qr:
             self._qr = _qr_image(qr)
             self._status = "need_scan"
             self._error = ""
+            try:
+                from piwapp.auth.qr import save_qr_png
+                save_qr_png(qr, str(QR_PNG))
+            except Exception:
+                pass
+        err = update.get("error")
+        if err:
+            self._error = str(err)[:300]
         if update.get("connection") == "open":
-            me = (update.get("me") or {}).get("id") or ""
-            self._me = str(me)
+            me = update.get("me") or {}
+            if isinstance(me, dict):
+                me = me.get("id") or ""
+            self._me = str(me or "")
             self._status = "linked"
             self._qr = ""
             self._error = ""

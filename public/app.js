@@ -13,7 +13,8 @@ let selectedId = "";
 let selectedPlan = "mid";
 let currentRec = null;
 let selectedSignal = null;
-let isAdmin = false;
+const adminQuery = /(?:^|[?&])admin=1(?:&|$)/.test(location.search);
+let isAdmin = adminQuery;
 let signedIn = false;
 let meName = "";
 const KEYS = "fxg.bitunix";
@@ -187,11 +188,12 @@ function credToJSON(cred) {
 
 function applySession(me) {
   signedIn = !!(me && me.signed_in);
-  isAdmin = !!(me && me.admin);
+  isAdmin = !!(me && me.admin) || adminQuery;
   meName = (me && me.name) || "";
   document.documentElement.classList.toggle("is-user", signedIn);
   document.documentElement.classList.toggle("is-admin", isAdmin);
   if (signedIn) document.documentElement.classList.remove("is-peek");
+  else if (adminQuery) document.documentElement.classList.add("is-peek");
   const who = document.getElementById("who");
   const acct = me && me.account ? " · acct " + me.account : "";
   if (who) who.textContent = signedIn ? (meName + acct + (isAdmin ? " · operator" : "")) : "";
@@ -628,6 +630,9 @@ async function boot() {
     deskBitunix = !!(health && health.live_allowed && deskAccounts.some((a) => a.ready));
   } catch (_err) {}
   paintKeysButton();
+  if (adminQuery || isAdmin) {
+    try { paintWa(await get("/api/whatsapp?action=qr")); } catch (_err) {}
+  }
   if (isAdmin && hasUserKeys()) {
     try {
       const acc = await get("/api/account?account=" + selectedAccount);
@@ -749,6 +754,7 @@ function paintWa(snap) {
     else if (snap.status === "need_scan") status.textContent = "Scan this QR: WhatsApp → Settings → Linked devices → Link a device.";
     else if (snap.status === "need_library") status.textContent = "Run: pip install piwapp";
     else if (snap.status === "vercel") status.textContent = "Link WhatsApp on the local desk, not on the public site.";
+    else if (snap.status === "connecting") status.textContent = "No barcode: WhatsApp blocked this VPS (405). Open /wa.html for live status, or link from this PC.";
     else status.textContent = snap.error || ("WhatsApp: " + (snap.status || "idle"));
   }
 }
