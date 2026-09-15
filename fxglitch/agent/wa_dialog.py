@@ -39,7 +39,7 @@ HELP = (
 
 
 def _open_signals() -> list[dict]:
-    rows = [s for s in list_signals() if s.get("still_good") is not False]
+    rows = [s for s in list_signals() if s.get("direction") and (s.get("bitunix_symbol") or s.get("binance_symbol"))]
     out = []
     seen = set()
     for row in rows:

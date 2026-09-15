@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FX-GLITCH · Telegram QR</title>
+  <link rel="stylesheet" href="/style.css" />
+  <style>
+    body { display: flex; min-height: 100vh; align-items: center; justify-content: center; padding: 24px; }
+    .card { width: min(440px, 100%); padding: 22px; }
+    .card img { width: 100%; background: #fff; border-radius: 12px; }
+    .qr-empty { min-height: 220px; display: flex; align-items: center; justify-content: center; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="glass card">
+    <p class="eyebrow">Link desktop device</p>
+    <h1>Telegram QR</h1>
+    <p class="hint" id="status">Loading…</p>
+    <div id="box" class="qr-box qr-empty">QR</div>
+  </div>
+  <script>
+    async function tick() {
+      const status = document.getElementById("status");
+      const box = document.getElementById("box");
+      try {
+        const res = await fetch("/api/telegram?action=qr");
+        const d = await res.json();
+        if (d.status === "watching" || d.status === "linked") {
+          box.textContent = "Linked";
+          status.textContent = "Telegram is watching " + ((d.watch && d.watch.title) || "the group") + ". New setups will land in WhatsApp.";
+          return;
+        }
+        if (d.qr) {
+          box.innerHTML = '<img alt="Telegram QR" src="' + d.qr + '" />';
+          status.textContent = "Phone: Telegram → Settings → Devices → Link desktop device. Scan this. It refreshes.";
+          return;
+        }
+        box.textContent = d.status || "no QR";
+        status.textContent = d.error || ("Status: " + (d.status || "idle"));
+      } catch (e) {
+        status.textContent = e.message || String(e);
+      }
+    }
+    tick();
+    setInterval(tick, 4000);
+  </script>
+</body>
+</html>

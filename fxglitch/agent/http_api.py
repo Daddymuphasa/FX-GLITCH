@@ -381,8 +381,6 @@ def dispatch(method: str, path: str, query: dict, body: dict, headers: dict | No
         rows = body.get("signals") if isinstance(body.get("signals"), list) else []
         return _json({"ok": True, "signals": replace_signals(rows)})
     if path == "/api/telegram" and method == "GET":
-        if not user or not user.get("admin"):
-            return _json({"status": "signed_out", "error": "operator only"}, 401)
         action = (query.get("action") or ["status"])[0]
         if action == "qr":
             return _json(bridge.ensure_qr())

@@ -122,8 +122,12 @@ class TelegramBridge:
         self._thread.start()
         session_file = Path(str(SESSION) + ".session")
         if session_file.exists():
+            for _ in range(50):
+                if self._loop is not None:
+                    break
+                threading.Event().wait(0.05)
             try:
-                self._call(self._boot(), timeout=45)
+                asyncio.run_coroutine_threadsafe(self._boot(), self._loop)
             except Exception as exc:
                 self._error = str(exc)
 
@@ -144,25 +148,51 @@ class TelegramBridge:
         fut = asyncio.run_coroutine_threadsafe(coro, self._loop)
         return fut.result(timeout=timeout)
 
+    def _debug(self, msg: str) -> None:
+        try:
+            path = ROOT / "data" / "telegram_debug.log"
+            with path.open("a", encoding="utf-8") as fh:
+                fh.write(datetime.now(timezone.utc).strftime("%H:%M:%SZ ") + msg + "\n")
+        except OSError:
+            pass
+
     async def _boot(self) -> None:
+        self._status = "booting"
+        self._debug("boot start")
+        self._write_status()
         creds = _creds()
         if creds is None:
             self._status = "need_api"
+            self._debug("no TELEGRAM_API_ID/HASH")
+            self._write_status()
             return
         try:
             from telethon import TelegramClient, events
         except ImportError:
             self._status = "need_library"
+            self._debug("telethon missing")
+            self._write_status()
             return
         api_id, api_hash = creds
         SESSION.parent.mkdir(parents=True, exist_ok=True)
         self._client = TelegramClient(str(SESSION), api_id, api_hash)
-        await self._client.connect()
+        try:
+            await self._client.connect()
+            self._debug("connected")
+        except Exception as exc:
+            self._status = "error"
+            self._error = str(exc)[:300]
+            self._debug("connect fail " + self._error)
+            self._write_status()
+            return
         if await self._client.is_user_authorized():
+            self._debug("authorized")
             await self._mark_linked()
             await self._listen(events)
             return
         self._status = "need_scan"
+        self._debug("not authorized, QR")
+        self._write_status()
         await self._new_qr()
 
     async def _new_qr(self) -> None:
@@ -248,6 +278,8 @@ class TelegramBridge:
             parsed = parse_signal(text)
             if not parsed.symbol or not parsed.direction:
                 return
+            if parsed.stop_adjustment and not parsed.stop_loss:
+                return
             title = ""
             try:
                 chat = await event.get_chat()
@@ -279,11 +311,12 @@ class TelegramBridge:
 
         if _valid_chat_id(watch):
             self._status = "watching"
+            self._write_status()
             asyncio.create_task(self._scan_today())
             asyncio.create_task(self._keep_scanning())
 
     def _today_start(self) -> datetime:
-        return datetime.now(timezone.utc) - timedelta(hours=72)
+        return datetime.now(timezone.utc) - timedelta(days=14)
 
     async def _keep_scanning(self) -> None:
         while True:
@@ -292,8 +325,10 @@ class TelegramBridge:
                 await self._scan_today()
                 from .inbox import publish_live
                 publish_live()
-            except Exception:
-                pass
+                self._write_status()
+            except Exception as exc:
+                self._error = f"rescan: {exc}"[:300]
+                self._write_status()
 
     async def _scan_today(self) -> dict:
         watch = _load_watch()
@@ -308,7 +343,7 @@ class TelegramBridge:
         seen = 0
         samples: list[str] = []
         try:
-            async for msg in self._client.iter_messages(entity, limit=500):
+            async for msg in self._client.iter_messages(entity, limit=800):
                 msg_time = msg.date
                 if msg_time.tzinfo is None:
                     msg_time = msg_time.replace(tzinfo=timezone.utc)
@@ -324,7 +359,10 @@ class TelegramBridge:
                     skipped += 1
                     continue
                 parsed = parse_signal(text)
-                if not parsed.symbol or not parsed.direction or parsed.stop_adjustment:
+                if not parsed.symbol or not parsed.direction:
+                    skipped += 1
+                    continue
+                if parsed.stop_adjustment and not parsed.stop_loss:
                     skipped += 1
                     continue
                 scanned += 1
@@ -361,6 +399,7 @@ class TelegramBridge:
         except Exception as exc:
             return {"ok": False, "error": str(exc), "scanned": scanned, "kept": kept,
                     "skipped": skipped, "seen": seen, "samples": samples}
+        self._write_status()
         return {"ok": True, "error": "", "scanned": scanned, "kept": kept, "skipped": skipped,
                 "seen": seen, "samples": samples,
                 "since": since.strftime("%Y-%m-%dT%H:%M:%SZ"), "chat": watch}
@@ -381,6 +420,20 @@ class TelegramBridge:
         from telethon import events
         await self._mark_linked()
         await self._listen(events)
+
+    def _write_status(self) -> None:
+        try:
+            path = ROOT / "data" / "telegram_status.json"
+            snap = {
+                "status": self._status,
+                "error": self._error,
+                "user": self._me,
+                "watch": _load_watch(),
+                "at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            }
+            path.write_text(json.dumps(snap, indent=2), encoding="utf-8")
+        except OSError:
+            pass
 
     def snapshot(self) -> dict:
         watch = _load_watch()

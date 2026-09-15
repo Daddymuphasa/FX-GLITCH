@@ -91,18 +91,18 @@ def _with_plans(row: dict) -> dict:
 
 
 def publish_live() -> list[dict]:
-    rows = _load()
-    good = [row for row in rows if row.get("still_good") is True]
-    recent = [row for row in rows if row.get("direction") and row.get("binance_symbol")]
-    seen_ids: set[str] = set()
+    rows = list_signals()
     merged: list[dict] = []
-    for row in good + recent:
+    seen_ids: set[str] = set()
+    for row in rows:
+        if not (row.get("direction") and (row.get("binance_symbol") or row.get("bitunix_symbol"))):
+            continue
         key = str(row.get("id") or row.get("telegram_id") or row.get("raw"))
         if key in seen_ids:
             continue
         seen_ids.add(key)
         merged.append(row)
-        if len(merged) >= 20:
+        if len(merged) >= 40:
             break
     good = merged
     good = [_with_plans(row) for row in good]
@@ -158,11 +158,10 @@ def list_signals() -> list[dict]:
         rows = _load_live() or [DEMO]
 
     def _key(row: dict) -> tuple:
-        good = 0 if row.get("still_good") is True else 1
         stamp = str(row.get("posted_at") or row.get("received_at") or "")
-        return (good, stamp)
+        return stamp
 
-    return sorted(rows, key=_key)
+    return sorted(rows, key=_key, reverse=True)
 
 
 def ingest(message: str, *, source: str = "paste", telegram_id: str | None = None,

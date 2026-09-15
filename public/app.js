@@ -285,7 +285,7 @@ function uniqueSignals(signals) {
     seen.add(key);
     out.push(s);
   });
-  out.sort((a, b) => Number(b.still_good === true) - Number(a.still_good === true));
+  out.sort((a, b) => String(b.posted_at || b.received_at || "").localeCompare(String(a.posted_at || a.received_at || "")));
   return out;
 }
 
