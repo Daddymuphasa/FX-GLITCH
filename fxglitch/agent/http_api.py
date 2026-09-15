@@ -398,8 +398,15 @@ def dispatch(method: str, path: str, query: dict, body: dict, headers: dict | No
         action = (query.get("action") or ["status"])[0]
         if action == "qr":
             return _json(wa_bridge.ensure_qr())
+        if action == "subscribers":
+            return _json({"jids": wa_bridge.subscribers()})
         return _json(wa_bridge.snapshot())
     if path == "/api/whatsapp" and method == "POST":
+        if body.get("action") == "chat" or body.get("text"):
+            jid = str(body.get("jid") or "")
+            if not jid:
+                return _json({"error": "jid required"}, 400)
+            return _json(wa_bridge.chat(jid, str(body.get("text") or "")))
         return _json(wa_bridge.ensure_qr())
     if path == "/api/telegram" and method == "POST":
         action = body.get("action")

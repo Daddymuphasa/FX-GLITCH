@@ -215,6 +215,20 @@ class WhatsAppBridge:
             "users": sum(1 for u in self._users.values() if u.get("account")),
         }
 
+    def chat(self, jid: str, text: str) -> dict:
+        session = self._users.setdefault(str(jid), {})
+        reply = handle(session, text)
+        self._save_users()
+        return {
+            "reply": reply,
+            "logged_in": bool(session.get("account")),
+            "account": session.get("account"),
+            "name": session.get("name"),
+        }
+
+    def subscribers(self) -> list[str]:
+        return [jid for jid, row in self._users.items() if row.get("account")]
+
     def notify_signals(self, rows: list) -> None:
         if self._status != "linked" or not self._client or not self._loop:
             return
