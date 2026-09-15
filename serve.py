@@ -80,6 +80,7 @@ def main() -> None:
     from http.server import ThreadingHTTPServer
 
     from fxglitch.agent.http_api import Handler
+    from fxglitch.agent.telegram_bot import bridge as tg_bot
     from fxglitch.agent.telegram_user import bridge
     from fxglitch.agent.whatsapp_user import bridge as wa_bridge
 
@@ -92,6 +93,7 @@ def main() -> None:
     public = os.path.join(ROOT, "public")
     Handler.web_root = public if os.path.isdir(public) else os.path.join(ROOT, "web")
     bridge.start()
+    tg_bot.start()
     wa_bridge.start()
     httpd = ThreadingHTTPServer((args.host, args.port), Handler)
     print(f"FX-GLITCH Agent OS  {url}")
