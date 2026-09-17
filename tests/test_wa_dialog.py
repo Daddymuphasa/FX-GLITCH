@@ -6,6 +6,16 @@ from fxglitch.agent import wa_dialog
 
 
 class TestWaDialog(unittest.TestCase):
+    def test_plain_language_menu_commands(self):
+        session = {"account": 1, "name": "Test", "step": "home"}
+        with patch.object(wa_dialog, "format_signals", return_value="AVAILABLE") as signals:
+            self.assertEqual(wa_dialog.handle(session, "available trades"), "AVAILABLE")
+            signals.assert_called_once()
+        with patch.object(wa_dialog, "format_positions", return_value="RUNNING"):
+            self.assertEqual(wa_dialog.handle(session, "running trades"), "RUNNING")
+        with patch.object(wa_dialog, "format_balance", return_value="BALANCE"):
+            self.assertEqual(wa_dialog.handle(session, "account balance"), "BALANCE")
+
     def setUp(self):
         os.environ["BITUNIX_ACCESS"] = "alpha"
         os.environ["BITUNIX_ACCESS_2"] = "bravo"

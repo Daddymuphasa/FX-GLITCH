@@ -23,19 +23,29 @@ PLAN_WORDS = {
 }
 PLAN_LABEL = {"low": "Easy", "mid": "Normal", "high": "Bold", "daredevil": "Max"}
 HELP = (
-    "FX-GLITCH desk on WhatsApp.\n\n"
-    "Send your *access code* to log in.\n"
-    "Then:\n"
-    "• *signals* — open setups\n"
-    "• *take* — pick a trade\n"
-    "• *1* / *2* / *3* — choose that setup\n"
-    "• *easy* / *normal* / *bold* / *max* — risk\n"
-    "• *yes* — send it on your Bitunix account\n"
-    "• *positions* — what is open now\n"
-    "• *close 1* — flatten that position\n"
-    "• *close all* — flatten everything\n"
-    "• *logout*"
+    "Send your *access code* to open your Bitunix account.\n\n"
+    "After login, you can type:\n"
+    "• *available trades* — setups from Telegram\n"
+    "• *running trades* — positions currently open\n"
+    "• *account balance* — free, used, and total balance\n"
+    "• *take* — choose a setup to trade\n"
+    "• *help* — show this menu\n"
+    "• *logout* — sign out"
 )
+
+
+def format_menu(session: dict) -> str:
+    name = session.get("name") or "your account"
+    equity = float(session.get("equity") or 0)
+    return (
+        f"You are in: *{name}*\n"
+        f"Balance about {equity:.2f} USDT\n\n"
+        "Choose an option (reply with the number or words):\n"
+        "1️⃣ *Available trades*\n"
+        "2️⃣ *Running trades*\n"
+        "3️⃣ *Account balance*\n\n"
+        "You can also type *take*, *help*, or *logout*."
+    )
 
 
 def _open_signals() -> list[dict]:
@@ -56,14 +66,24 @@ def _open_signals() -> list[dict]:
 def format_signals(rows: list[dict] | None = None) -> str:
     rows = rows if rows is not None else _open_signals()
     if not rows:
-        return "No setups in the last 4 hours. I'll ping you when the group posts a new one."
-    lines = ["Open now:"]
+        return (
+            "No new trades in the last 4 hours.\n"
+            "I will message you when Cosmas posts one.\n\n"
+            "2  Running trades\n"
+            "3  Account balance"
+        )
+    lines = ["Available trades (last 4 hours):"]
     for i, row in enumerate(rows, 1):
         side = (row.get("direction") or "").upper()
         pair = row.get("bitunix_symbol") or row.get("binance_symbol") or "?"
-        tag = "OPEN" if row.get("still_good") else "late"
-        lines.append(f"{i}. {side} {pair} ({tag})")
-    lines.append("Reply *take* then the number, or just the number.")
+        sl = row.get("stop")
+        tp = row.get("take_profit") or (row.get("take_profits") or [None])[0]
+        tag = "still open" if row.get("still_good") else "late"
+        lines.append(f"\n{i}. {side} {pair} ({tag})")
+        if sl or tp:
+            lines.append(f"   Stop {sl}   Target {tp}")
+    lines.append("\nReply with the number to take it, then choose risk.")
+    lines.append("Menu: 2 running · 3 balance")
     return "\n".join(lines)
 
 
@@ -75,9 +95,14 @@ def _pick_signal(session: dict, index: int, rows: list[dict]) -> str:
     session["step"] = "risk"
     pair = row.get("bitunix_symbol") or row.get("binance_symbol")
     return (
-        f"{row.get('direction')} {pair}\n"
-        f"Entry {row.get('entry')}  SL {row.get('stop')}\n"
-        "How hard? Reply *easy*, *normal*, *bold*, or *max*."
+        f"Trade {index}: {row.get('direction')} {pair}\n"
+        f"Stop {row.get('stop')}   Target {row.get('take_profit')}\n\n"
+        "How much risk?\n"
+        "1  Easy\n"
+        "2  Normal\n"
+        "3  Bold\n"
+        "4  Max\n\n"
+        "Or type easy / normal / bold / max."
     )
 
 
@@ -96,14 +121,40 @@ def format_positions(session: dict) -> str:
         for p in rows
     ]
     if not rows:
-        return "No open positions on this account."
-    lines = ["Open on Bitunix:"]
+        return "No running trades. Your account is flat.\n\n1  Available trades\n3  Account balance"
+    lines = ["Running trades:"]
     for i, p in enumerate(rows, 1):
         pnl = p.unrealised_pnl
-        tag = f"{pnl:+.2f}" if pnl else "0"
-        lines.append(f"{i}. {p.side} {p.symbol}  qty {p.qty}  uPnL {tag}")
-    lines.append("Reply *close 1* (or the number) or *close all*.")
+        tag = f"{pnl:+.2f} USDT" if pnl is not None else "—"
+        lines.append(f"\n{i}. {p.side} {p.symbol}\n   Size {p.qty}   P/L {tag}")
+    lines.append("\nReply *close 1* to close that trade, or *close all*.")
+    lines.append("Menu: 1 trades · 3 balance")
     return "\n".join(lines)
+
+
+def format_balance(session: dict) -> str:
+    venue = from_slot(int(session.get("account") or 1))
+    if not venue.authenticated:
+        return "This account has no Bitunix keys on the desk."
+    try:
+        bal = venue.balance()
+    except VenueError as exc:
+        return f"Could not read balance: {exc}"
+    session["equity"] = float(bal.equity or 0)
+    open_n = 0
+    try:
+        open_n = len(venue.positions())
+    except Exception:
+        pass
+    return (
+        f"Account: *{session.get('name') or venue.account_name}*\n"
+        f"Free: {float(bal.available):.2f} {bal.currency}\n"
+        f"In trades: {float(bal.used):.2f} {bal.currency}\n"
+        f"Total: {float(bal.equity):.2f} {bal.currency}\n"
+        f"Running trades: {open_n}\n\n"
+        "1  Available trades\n"
+        "2  Running trades"
+    )
 
 
 def _close_one(session: dict, index: int) -> str:
@@ -221,15 +272,18 @@ def handle(session: dict, text: str) -> str:
         return "That code did not match. Ask the operator for your access code."
 
     rows = _open_signals()
-    if low in ("signals", "setups", "list", "open"):
+    if low in ("signals", "setups", "list", "open", "trades", "available", "available trades", "available trade"):
         session["step"] = "home"
         return format_signals(rows)
     if low == "take":
         session["step"] = "pick"
         return format_signals(rows)
-    if low in ("positions", "position", "book", "open positions"):
+    if low in ("positions", "position", "book", "open positions", "running", "running trades", "open trades"):
         session["step"] = "close_pick"
         return format_positions(session)
+    if low in ("balance", "account", "account balance", "my balance", "wallet"):
+        session["step"] = "home"
+        return format_balance(session)
     if low in ("close all", "flatten", "close everything"):
         return _close_all(session)
     if low.startswith("close "):
@@ -274,4 +328,4 @@ def handle(session: dict, text: str) -> str:
         session["step"] = "home"
         session.pop("plan", None)
         return "Cancelled. *signals* to see setups."
-    return "Send *signals*, *positions*, *close 1*, *easy/normal/bold/max*, or *help*."
+    return "I didn’t understand that. Type *available trades*, *running trades*, *account balance*, *take*, or *help*."
