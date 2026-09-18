@@ -16,19 +16,25 @@ PLAN_WORDS = {
     "low": "low",
     "normal": "mid",
     "mid": "mid",
+    "average": "mid",
+    "average risk": "mid",
     "bold": "high",
     "high": "high",
     "max": "daredevil",
     "daredevil": "daredevil",
+    "dare devil": "daredevil",
+    "high risk": "high",
+    "low risk": "low",
 }
-PLAN_LABEL = {"low": "Easy", "mid": "Normal", "high": "Bold", "daredevil": "Max"}
+PLAN_LABEL = {"low": "Low risk", "mid": "Average risk", "high": "High risk", "daredevil": "Daredevil"}
 HELP = (
     "Send your *access code* to open your Bitunix account.\n\n"
     "After login, you can type:\n"
     "• *available trades* — setups from Telegram\n"
     "• *running trades* — positions currently open\n"
     "• *account balance* — free, used, and total balance\n"
-    "• *take* — choose a setup to trade\n"
+        "• *yes* — take the newest signal, then choose risk\n"
+        "• *take* — choose a setup to trade\n"
     "• *help* — show this menu\n"
     "• *logout* — sign out"
 )
@@ -97,12 +103,12 @@ def _pick_signal(session: dict, index: int, rows: list[dict]) -> str:
     return (
         f"Trade {index}: {row.get('direction')} {pair}\n"
         f"Stop {row.get('stop')}   Target {row.get('take_profit')}\n\n"
-        "How much risk?\n"
-        "1  Easy\n"
-        "2  Normal\n"
-        "3  Bold\n"
-        "4  Max\n\n"
-        "Or type easy / normal / bold / max."
+        "Choose your risk/reward level:\n"
+        "1  Low risk\n"
+        "2  Average risk\n"
+        "3  High risk\n"
+        "4  Daredevil\n\n"
+        "Or type low risk / average risk / high risk / daredevil."
     )
 
 
@@ -299,9 +305,12 @@ def handle(session: dict, text: str) -> str:
         return format_positions(session)
 
     if low.isdigit():
-        if session.get("step") == "close_pick":
-            return _close_one(session, int(low))
-        return _pick_signal(session, int(low), rows)
+        if session.get("step") == "risk" and low in ("1", "2", "3", "4"):
+            low = ("low", "average", "high", "daredevil")[int(low) - 1]
+        else:
+            if session.get("step") == "close_pick":
+                return _close_one(session, int(low))
+            return _pick_signal(session, int(low), rows)
 
     if low in PLAN_WORDS:
         if not session.get("signal"):
@@ -320,6 +329,15 @@ def handle(session: dict, text: str) -> str:
         return f"{label} on {session['signal'].get('bitunix_symbol') or session['signal'].get('binance_symbol')}.{extra}\nReply *yes* to send, or *no*."
 
     if low in ("yes", "y", "send", "confirm", "execute"):
+        if not session.get("signal"):
+            if not rows:
+                return "There is no recent signal to take. Type *available trades*."
+            if len(rows) == 1:
+                session["signal"] = rows[0]
+                session["step"] = "risk"
+                return _pick_signal(session, 1, rows)
+            session["step"] = "pick"
+            return "I found more than one recent signal. Reply with its number first.\n\n" + format_signals(rows)
         plan_id = session.get("plan")
         if not session.get("signal") or not plan_id:
             return "Nothing to send. *signals* then pick risk."

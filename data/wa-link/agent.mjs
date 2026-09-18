@@ -103,7 +103,8 @@ async function start() {
         const pair = row.bitunix_symbol || row.binance_symbol || "?";
         lines.push(`${i + 1}. ${(row.direction || "").toUpperCase()} ${pair}`);
       });
-      lines.push("Reply *take* then a number, then *easy/normal/bold/max*, then *yes*.");
+      lines.push("Reply *yes* to take the newest signal, or reply with a number.");
+      lines.push("Then choose *low risk*, *average risk*, *high risk*, or *daredevil*.");
       const body = lines.join("\n");
       for (const jid of jids) {
         await sock.sendMessage(jid, { text: body });

@@ -12,9 +12,11 @@ import io
 import json
 import os
 import threading
+import time
 from pathlib import Path
 
 from .wa_dialog import HELP, format_signals, handle
+from ..venues.bitunix import from_slot
 
 ROOT = Path(__file__).resolve().parents[2]
 AUTH = ROOT / "data" / "whatsapp_auth.json"
@@ -44,6 +46,7 @@ class WhatsAppBridge:
         self._qr = ""
         self._me = ""
         self._users: dict[str, dict] = {}
+        self._trail_state: dict[str, dict] = {}
         self._load_users()
 
     def _load_users(self) -> None:
@@ -67,6 +70,7 @@ class WhatsAppBridge:
             return
         self._thread = threading.Thread(target=self._run_loop, name="wa-bridge", daemon=True)
         self._thread.start()
+        threading.Thread(target=self._trail_loop, name="wa-trailing", daemon=True).start()
         for _ in range(50):
             if self._loop is not None:
                 break
@@ -82,6 +86,54 @@ class WhatsAppBridge:
         self._loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self._loop)
         self._loop.run_forever()
+
+    def _trail_loop(self) -> None:
+        """Protect WhatsApp-entered trades once they reach one R profit.
+
+        One R is the original distance from entry to the signal stop. At +1R
+        the stop moves to breakeven; for every additional +2R, it locks in
+        another +1R. Stops only move in the protective direction.
+        """
+        while True:
+            time.sleep(10)
+            for session in list(self._users.values()):
+                if not session.get("account"):
+                    continue
+                try:
+                    venue = from_slot(int(session["account"]))
+                    if not venue.authenticated:
+                        continue
+                    positions = venue.positions()
+                    stops = venue.stops()
+                    for pos in positions:
+                        key = f"{session['account']}:{pos.venue_id or pos.symbol}"
+                        state = self._trail_state.setdefault(key, {})
+                        initial = float(state.get("initial_stop") or 0)
+                        if initial <= 0:
+                            initial = float(stops.get(pos.venue_id) or 0)
+                            if initial > 0:
+                                state["initial_stop"] = initial
+                        if initial <= 0 or not pos.qty or not pos.entry_price:
+                            continue
+                        one_r = abs(pos.entry_price - initial) * abs(pos.qty)
+                        if one_r <= 0 or pos.unrealised_pnl < one_r:
+                            continue
+                        steps = int(pos.unrealised_pnl // (2 * one_r))
+                        target = pos.entry_price
+                        if pos.direction == 1:
+                            target += steps * abs(pos.entry_price - initial)
+                            current = float(stops.get(pos.venue_id) or initial)
+                            if target <= current:
+                                continue
+                        else:
+                            target -= steps * abs(pos.entry_price - initial)
+                            current = float(stops.get(pos.venue_id) or initial)
+                            if target >= current:
+                                continue
+                        venue.set_stop(pos, target)
+                        state["last_stop"] = target
+                except Exception as exc:
+                    self._error = f"trailing: {exc}"[:300]
 
     def _call(self, coro, timeout: float = 30):
         if self._loop is None:

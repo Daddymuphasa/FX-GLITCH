@@ -25,6 +25,7 @@ TIERS: tuple[dict, ...] = (
         "label": "Daredevil",
         "risk_pct": 8.0,
         "leverage_mult": 2.0,
+        "leverage_add": 0,
         "leverage_floor": 15,
         "leverage_cap": 25,
         "tp_index": -1,
@@ -36,6 +37,7 @@ TIERS: tuple[dict, ...] = (
         "label": "High risk",
         "risk_pct": 3.0,
         "leverage_mult": 1.0,
+        "leverage_add": 2,
         "leverage_floor": 8,
         "leverage_cap": 15,
         "tp_index": -1,
@@ -44,9 +46,10 @@ TIERS: tuple[dict, ...] = (
     },
     {
         "id": "mid",
-        "label": "Mid risk",
+        "label": "Average risk",
         "risk_pct": 1.0,
         "leverage_mult": 0.5,
+        "leverage_add": 4,
         "leverage_floor": 3,
         "leverage_cap": 5,
         "tp_index": 0,
@@ -58,6 +61,7 @@ TIERS: tuple[dict, ...] = (
         "label": "Low risk",
         "risk_pct": 0.5,
         "leverage_mult": 0.3,
+        "leverage_add": 2,
         "leverage_floor": 2,
         "leverage_cap": 3,
         "tp_index": 0,
@@ -119,7 +123,8 @@ def _f(value) -> float | None:
 
 def _leverage(signal_lev: float | None, tier: dict, max_lev: int | None) -> int:
     base = signal_lev if signal_lev and signal_lev > 0 else 5.0
-    raw = max(base * tier["leverage_mult"], float(tier["leverage_floor"]))
+    raw = max(base * tier["leverage_mult"] + float(tier.get("leverage_add", 0)),
+              float(tier["leverage_floor"]))
     cap = float(tier["leverage_cap"])
     if max_lev:
         cap = min(cap, float(max_lev))
