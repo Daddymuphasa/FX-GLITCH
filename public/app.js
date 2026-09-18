@@ -114,7 +114,8 @@ async function readJson(res) {
   try {
     return JSON.parse(text);
   } catch (_err) {
-    throw new Error("This host has no login API yet. Wait for deploy, or use http://localhost:8765");
+    const where = res.url || "the API";
+    throw new Error(`The website API returned a page instead of JSON (${res.status} from ${where}). Please redeploy the API.`);
   }
 }
 
@@ -821,7 +822,7 @@ async function enterDesk() {
   const code = (document.getElementById("access-code").value || "").trim();
   gateMsg("Checking…");
   try {
-    const me = await post("/api/health", { code });
+    const me = await post("/api/auth/code", { code });
     applySession(me);
     gateMsg("");
     await afterLogin();
