@@ -242,7 +242,7 @@ def handle(session: dict, text: str) -> str:
     low = msg.lower()
     if not msg:
         return HELP
-    if low in ("help", "hi", "hello", "start", "menu"):
+    if low in ("help", "hi", "hello", "hey", "start", "menu"):
         if session.get("account"):
             return f"Logged in as {session.get('name')}.\n\n" + HELP
         return HELP
@@ -278,6 +278,18 @@ def handle(session: dict, text: str) -> str:
         return "That code did not match. Ask the operator for your access code."
 
     rows = _open_signals()
+    # WhatsApp users should not have to guess exact command words. Keep this
+    # intentionally small and deterministic: these are navigation requests,
+    # not an invitation to interpret trading instructions loosely.
+    if any(word in low for word in ("signal", "setup", "trade available", "available trade")):
+        session["step"] = "home"
+        return format_signals(rows)
+    if any(word in low for word in ("running trade", "open trade", "position", "positions")):
+        session["step"] = "close_pick"
+        return format_positions(session)
+    if any(word in low for word in ("balance", "wallet", "account balance")):
+        session["step"] = "home"
+        return format_balance(session)
     if low in ("signals", "setups", "list", "open", "trades", "available", "available trades", "available trade"):
         session["step"] = "home"
         return format_signals(rows)
