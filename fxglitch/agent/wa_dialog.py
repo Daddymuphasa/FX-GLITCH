@@ -30,7 +30,7 @@ PLAN_LABEL = {"low": "Low risk", "mid": "Average risk", "high": "High risk", "da
 HELP = (
     "Send your *access code* to open your Bitunix account.\n\n"
     "After login, you can type:\n"
-    "• *available trades* — setups from Telegram\n"
+    "• *available trades* — current setups\n"
     "• *running trades* — positions currently open\n"
     "• *account balance* — free, used, and total balance\n"
         "• *yes* — take the newest signal, then choose risk\n"
@@ -74,7 +74,7 @@ def format_signals(rows: list[dict] | None = None) -> str:
     if not rows:
         return (
             "No new trades in the last 4 hours.\n"
-            "I will message you when Cosmas posts one.\n\n"
+            "I will message you when a new setup is available.\n\n"
             "2  Running trades\n"
             "3  Account balance"
         )
@@ -269,7 +269,7 @@ def handle(session: dict, text: str) -> str:
             })
             return (
                 f"Portfolio open: *{user['name']}* (Bitunix {user['account']}).\n"
-                f"Equity ~{equity:.2f} USDT. New group trades will ping you here.\n"
+                f"Equity ~{equity:.2f} USDT. New setups will be sent here.\n"
                 "Risk: *easy* / *normal* / *bold* / *max*.\n\n"
                 + format_signals()
             )
