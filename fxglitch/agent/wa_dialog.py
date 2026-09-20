@@ -69,6 +69,30 @@ def _open_signals() -> list[dict]:
     return out
 
 
+def _enrich_signal(row: dict) -> dict:
+    """Parse the original setup again so WhatsApp never relies on stale fields."""
+    raw = row.get("raw") or ""
+    if not raw:
+        return row
+    try:
+        rec = recommend(raw, mark=row.get("mark"))
+    except Exception:
+        return row
+    if row.get("direction") is None and rec.direction:
+        row["direction"] = rec.direction
+    if row.get("bitunix_symbol") is None and rec.bitunix_symbol:
+        row["bitunix_symbol"] = rec.bitunix_symbol
+    if row.get("entry") is None and rec.entry is not None:
+        row["entry"] = rec.entry
+    if row.get("stop") is None and rec.stop is not None:
+        row["stop"] = rec.stop
+    if not row.get("take_profits") and rec.take_profits:
+        row["take_profits"] = rec.take_profits
+    if row.get("take_profit") is None and rec.take_profits:
+        row["take_profit"] = rec.take_profits[0]
+    return row
+
+
 def format_signals(rows: list[dict] | None = None) -> str:
     rows = rows if rows is not None else _open_signals()
     if not rows:
@@ -80,6 +104,7 @@ def format_signals(rows: list[dict] | None = None) -> str:
         )
     lines = ["Available trades (last 4 hours):"]
     for i, row in enumerate(rows, 1):
+        row = _enrich_signal(row)
         side = (row.get("direction") or "").upper()
         pair = row.get("bitunix_symbol") or row.get("binance_symbol") or "?"
         sl = row.get("stop")
@@ -96,7 +121,7 @@ def format_signals(rows: list[dict] | None = None) -> str:
 def _pick_signal(session: dict, index: int, rows: list[dict]) -> str:
     if index < 1 or index > len(rows):
         return "That number is not on the list. Send *signals* first."
-    row = rows[index - 1]
+    row = _enrich_signal(rows[index - 1])
     stop = row.get("stop")
     targets = row.get("take_profits") or []
     target = row.get("take_profit") or (targets[0] if targets else None)
