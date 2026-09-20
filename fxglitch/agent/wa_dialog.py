@@ -97,12 +97,23 @@ def _pick_signal(session: dict, index: int, rows: list[dict]) -> str:
     if index < 1 or index > len(rows):
         return "That number is not on the list. Send *signals* first."
     row = rows[index - 1]
+    stop = row.get("stop")
+    targets = row.get("take_profits") or []
+    target = row.get("take_profit") or (targets[0] if targets else None)
+    if stop in (None, "", 0) or target in (None, "", 0):
+        session.pop("signal", None)
+        session["step"] = "home"
+        return (
+            f"{row.get('bitunix_symbol') or row.get('binance_symbol') or 'This setup'} "
+            "is missing a stop-loss or target, so I will not send it.\n"
+            "Please wait for a complete setup."
+        )
     session["signal"] = row
     session["step"] = "risk"
     pair = row.get("bitunix_symbol") or row.get("binance_symbol")
     return (
         f"Trade {index}: {row.get('direction')} {pair}\n"
-        f"Stop {row.get('stop')}   Target {row.get('take_profit')}\n\n"
+        f"Stop {stop}   Target {target}\n\n"
         "Choose your risk/reward level:\n"
         "1  Low risk\n"
         "2  Average risk\n"
@@ -213,13 +224,33 @@ def _execute(session: dict, plan_id: str) -> str:
     row = session.get("signal") or {}
     raw = row.get("raw") or ""
     slot = int(session.get("account") or 1)
-    rec = recommend(raw, equity=float(session.get("equity") or 1000), mark=row.get("mark"))
-    plan = plan_by_id(rec, plan_id)
-    if plan is None or not plan.get("policy_ok"):
-        return (plan or {}).get("policy_reason") or "That risk is not available on this setup."
     venue = from_slot(slot)
     if not venue.authenticated:
         return f"{session.get('name') or 'This account'} has no Bitunix keys yet."
+    equity = float(session.get("equity") or 1000)
+    try:
+        balance = venue.balance()
+        equity = float(balance.equity or equity)
+    except Exception:
+        balance = None
+    rec = recommend(
+        raw,
+        equity=equity,
+        mark=row.get("mark"),
+        instruments=venue.instruments(),
+        balance=balance,
+    )
+    plan = plan_by_id(rec, plan_id)
+    if plan is None or not plan.get("policy_ok"):
+        return (plan or {}).get("policy_reason") or "That risk is not available on this setup."
+    instrument = venue.instruments().get(plan.get("symbol") or rec.bitunix_symbol)
+    if instrument and float(plan.get("qty") or 0) < float(instrument.min_qty):
+        return (
+            f"I did not send this trade. {instrument.symbol} requires at least "
+            f"{instrument.min_qty:g} contracts, but {PLAN_LABEL.get(plan_id, plan_id)} "
+            f"risk calculates {float(plan.get('qty') or 0):g}.\n"
+            "Increasing the size would exceed your selected risk, so this setup is skipped."
+        )
     try:
         placed = place_plan(venue, rec, plan)
     except VenueError as exc:
