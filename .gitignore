@@ -37,6 +37,8 @@ data/whatsapp_users.json
 data/auto_fills.json
 data/auto_trade.log
 data/trail_orig.json
+data/trail_watch.json
+data/wa_alerts.json
 data/wa-link/node_modules/
 data/wa-link/auth/
 data/wa-link/qr.png

@@ -16,7 +16,7 @@ from . import auth as passkeys
 from .whatsapp_user import bridge as wa_bridge
 from .inbox import ingest, list_signals, publish_live, replace_signals
 from .mcp_server import TOOLS
-from .plans import place_plan, plan_by_id, proposal_from_plan, recommend
+from .plans import SIZING_VERSION, place_plan, plan_by_id, proposal_from_plan, recommend
 from .positioning import fetch_briefing
 from .session import from_signal, judge_demo, paper_balance, run_cycle
 from .telegram_in import ingest_update
@@ -99,13 +99,13 @@ def _recommend_body(body: dict):
     slot = _slot(body.get("account"))
     instruments, mark, balance = _context(None, slot)
     mark = hint_mark or mark
-    rec_once = recommend(message, equity=equity, mark=mark, instruments=instruments,
+    rec_once = recommend(message, equity=equity, mark=mark, entry_override=mark, instruments=instruments,
                          balance=balance)
     parsed_symbol = rec_once.bitunix_symbol or rec_once.binance_symbol
     if parsed_symbol and mark is None:
         instruments, mark, balance = _context(parsed_symbol, slot)
         rec_once = recommend(message, equity=(balance.equity if balance else equity),
-                             mark=mark, instruments=instruments, balance=balance)
+                             mark=mark, entry_override=mark, instruments=instruments, balance=balance)
     return _json(rec_once.to_dict())
 
 
@@ -223,6 +223,7 @@ def dispatch(method: str, path: str, query: dict, body: dict, headers: dict | No
         return _json({
             "ok": True,
             "product": "FX-GLITCH Agent OS",
+            "sizing_version": SIZING_VERSION,
             "dry_run": not live_ok,
             "bitunix": live_ok,
             "bitunix_accounts": accounts,
@@ -317,7 +318,7 @@ def dispatch(method: str, path: str, query: dict, body: dict, headers: dict | No
         if symbol and mark is None:
             instruments, mark, balance = _context(symbol, slot)
             rec = recommend(message, equity=(balance.equity if balance else equity),
-                            mark=mark, instruments=instruments, balance=balance)
+                            mark=mark, entry_override=mark, instruments=instruments, balance=balance)
         plan = plan_by_id(rec, plan_id)
         if plan is None:
             return _json({"error": f"unknown plan {plan_id}"}, 400)
@@ -359,6 +360,7 @@ def dispatch(method: str, path: str, query: dict, body: dict, headers: dict | No
                 return _json({"error": str(exc), "dry_run": True, "plan": plan, "account": slot}, 400)
             fill["order_id"] = placed.get("order_id")
             fill["venue"] = "bitunix"
+            fill.update(stop=plan["stop"], take_profit=plan["take_profit"], leverage=plan["leverage"])
             payload = {
                 "sent": True, "dry_run": False, "venue": "bitunix",
                 "account": slot,
@@ -398,8 +400,13 @@ def dispatch(method: str, path: str, query: dict, body: dict, headers: dict | No
             return _json(wa_bridge.ensure_qr())
         if action == "subscribers":
             return _json({"jids": wa_bridge.subscribers()})
+        if action == "alerts":
+            return _json({"alerts": wa_bridge.pop_alerts(), "jids": wa_bridge.subscribers()})
         return _json(wa_bridge.snapshot())
     if path == "/api/whatsapp" and method == "POST":
+        if body.get("action") == "alert":
+            wa_bridge.queue_alert(str(body.get("text") or ""))
+            return _json({"ok": True})
         if body.get("action") == "chat" or body.get("text"):
             jid = str(body.get("jid") or "")
             if not jid:

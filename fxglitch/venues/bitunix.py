@@ -648,6 +648,22 @@ class Bitunix(Venue):
                 continue
         return out
 
+    def targets(self, symbol: str | None = None) -> dict[str, float]:
+        """Current take-profit price per positionId."""
+        rows = self._request("GET", "/api/v1/futures/tpsl/get_pending_orders",
+                             query={"symbol": symbol}, private=True)
+        out: dict[str, float] = {}
+        for row in rows or []:
+            pid = str(row.get("positionId", "") or "")
+            raw = row.get("tpPrice") or row.get("takeProfitPrice")
+            if not pid or raw in (None, "", "0"):
+                continue
+            try:
+                out[pid] = float(raw)
+            except (TypeError, ValueError):
+                continue
+        return out
+
     def set_stop(self, position: Position, stop_price: Decimal | float) -> OrderResult:
         """Move the stop on an open position.
 

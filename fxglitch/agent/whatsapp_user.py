@@ -15,14 +15,16 @@ import threading
 import time
 from pathlib import Path
 
-from .wa_dialog import HELP, format_signals, handle
-from ..venues.bitunix import from_slot
+from .protection import protect_account
+from .wa_dialog import handle
+from ..venues.bitunix import from_slot, listed_accounts
 
 ROOT = Path(__file__).resolve().parents[2]
 AUTH = ROOT / "data" / "whatsapp_auth.json"
 KEYS = ROOT / "data" / "whatsapp_auth.json.keys"
 DB = ROOT / "data" / "whatsapp.db"
 USERS = ROOT / "data" / "whatsapp_users.json"
+ALERTS = ROOT / "data" / "wa_alerts.json"
 QR_PNG = ROOT / "data" / "whatsapp_qr.png"
 DEBUG = ROOT / "data" / "wa_debug.log"
 
@@ -46,7 +48,6 @@ class WhatsAppBridge:
         self._qr = ""
         self._me = ""
         self._users: dict[str, dict] = {}
-        self._trail_state: dict[str, dict] = {}
         self._load_users()
 
     def _load_users(self) -> None:
@@ -88,52 +89,22 @@ class WhatsAppBridge:
         self._loop.run_forever()
 
     def _trail_loop(self) -> None:
-        """Protect WhatsApp-entered trades once they reach one R profit.
-
-        One R is the original distance from entry to the signal stop. At +1R
-        the stop moves to breakeven; for every additional +2R, it locks in
-        another +1R. Stops only move in the protective direction.
-        """
+        """Poll each linked account once; state survives chat logout/restart."""
         while True:
             time.sleep(10)
-            for session in list(self._users.values()):
-                if not session.get("account"):
+            self._trail_once()
+
+    def _trail_once(self) -> None:
+        accounts = {row["id"] for row in listed_accounts() if row.get("ready")}
+        accounts.update(session["account"] for session in list(self._users.values()) if session.get("account"))
+        for account in accounts:
+            try:
+                venue = from_slot(int(account))
+                if not venue.authenticated:
                     continue
-                try:
-                    venue = from_slot(int(session["account"]))
-                    if not venue.authenticated:
-                        continue
-                    positions = venue.positions()
-                    stops = venue.stops()
-                    for pos in positions:
-                        key = f"{session['account']}:{pos.venue_id or pos.symbol}"
-                        state = self._trail_state.setdefault(key, {})
-                        initial = float(state.get("initial_stop") or 0)
-                        if initial <= 0:
-                            initial = float(stops.get(pos.venue_id) or 0)
-                            if initial > 0:
-                                state["initial_stop"] = initial
-                        if initial <= 0 or not pos.qty or not pos.entry_price:
-                            continue
-                        one_r = abs(pos.entry_price - initial) * abs(pos.qty)
-                        if one_r <= 0 or pos.unrealised_pnl < one_r:
-                            continue
-                        steps = int(pos.unrealised_pnl // (2 * one_r))
-                        target = pos.entry_price
-                        if pos.direction == 1:
-                            target += steps * abs(pos.entry_price - initial)
-                            current = float(stops.get(pos.venue_id) or initial)
-                            if target <= current:
-                                continue
-                        else:
-                            target -= steps * abs(pos.entry_price - initial)
-                            current = float(stops.get(pos.venue_id) or initial)
-                            if target >= current:
-                                continue
-                        venue.set_stop(pos, target)
-                        state["last_stop"] = target
-                except Exception as exc:
-                    self._error = f"trailing: {exc}"[:300]
+                protect_account(venue)
+            except Exception as exc:
+                self._error = f"trailing: {exc}"[:300]
 
     def _call(self, coro, timeout: float = 30):
         if self._loop is None:
@@ -175,7 +146,7 @@ class WhatsAppBridge:
         client.on("connection.update", self._on_connection)
 
         def on_messages(payload):
-            messages = getattr(payload, "messages", None) or payload.get("messages") if isinstance(payload, dict) else []
+            messages = payload.get("messages") if isinstance(payload, dict) else getattr(payload, "messages", None)
             for msg in messages or []:
                 asyncio.create_task(self._on_message(msg))
 
@@ -281,14 +252,32 @@ class WhatsAppBridge:
     def subscribers(self) -> list[str]:
         return [jid for jid, row in self._users.items() if row.get("account")]
 
-    def notify_signals(self, rows: list) -> None:
-        if self._status != "linked" or not self._client or not self._loop:
+    def queue_alert(self, text: str) -> None:
+        """Result-only WhatsApp ping: trail, TP, SL, liquidation."""
+        msg = (text or "").strip()
+        if not msg:
             return
-        text = "New setups.\n" + format_signals(rows)
-        for jid, session in list(self._users.items()):
-            if not session.get("account"):
-                continue
-            asyncio.run_coroutine_threadsafe(self._send(jid, text), self._loop)
+        try:
+            rows = json.loads(ALERTS.read_text(encoding="utf-8")) if ALERTS.exists() else []
+        except (OSError, ValueError):
+            rows = []
+        if not isinstance(rows, list):
+            rows = []
+        rows.append({"text": msg, "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())})
+        ALERTS.parent.mkdir(parents=True, exist_ok=True)
+        ALERTS.write_text(json.dumps(rows[-50:], indent=2), encoding="utf-8")
+
+    def pop_alerts(self) -> list[str]:
+        try:
+            rows = json.loads(ALERTS.read_text(encoding="utf-8")) if ALERTS.exists() else []
+        except (OSError, ValueError):
+            rows = []
+        ALERTS.write_text("[]", encoding="utf-8")
+        return [r.get("text") for r in rows if isinstance(r, dict) and r.get("text")]
+
+    def notify_signals(self, rows: list) -> None:
+        """New Cosmas setups are auto-traded. WhatsApp only gets results."""
+        return
 
 
 bridge = WhatsAppBridge()

@@ -9,6 +9,7 @@ import json
 import os
 import sys
 import time
+import urllib.request
 from pathlib import Path
 
 if Path("/app/.env").exists():
@@ -20,8 +21,10 @@ else:
 sys.path.insert(0, str(ROOT))
 
 ORIG = ROOT / "data" / "trail_orig.json"
+WATCH = ROOT / "data" / "trail_watch.json"
 STEP = 200.0
 SLEEP = 20
+DESK = os.environ.get("FXG_DESK", "http://127.0.0.1:8765")
 
 
 def load_env() -> None:
@@ -56,6 +59,34 @@ def _orig() -> dict:
 def _save_orig(data: dict) -> None:
     ORIG.parent.mkdir(parents=True, exist_ok=True)
     ORIG.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+
+def _watch() -> dict:
+    try:
+        data = json.loads(WATCH.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _save_watch(data: dict) -> None:
+    WATCH.parent.mkdir(parents=True, exist_ok=True)
+    WATCH.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+
+def alert(text: str) -> None:
+    body = json.dumps({"action": "alert", "text": text}).encode()
+    req = urllib.request.Request(
+        DESK + "/api/whatsapp",
+        data=body,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        urllib.request.urlopen(req, timeout=10).read()
+        print("ALERT", text.replace("\n", " | "), flush=True)
+    except Exception as exc:
+        print("ALERT_FAIL", str(exc)[:120], flush=True)
 
 
 def roi(side: str, entry: float, mark: float, lev: float) -> float:
@@ -114,12 +145,49 @@ def trail_one(venue, pos, orig: dict) -> None:
             return
     result = venue.set_stop(pos, new_sl)
     print("TRAIL", pos.symbol, "sl", new_sl, "lock_roi", lock_roi, result.venue_order_id, flush=True)
+    if lock_roi <= 0:
+        alert(
+            f"{pos.symbol} {side}: 200% in profit.\n"
+            f"Stop moved to breakeven ({new_sl:.6g})."
+        )
+    else:
+        alert(
+            f"{pos.symbol} {side}: another 200% in profit.\n"
+            f"Stop trailed to lock {lock_roi:.0f}% ({new_sl:.6g})."
+        )
+
+
+def _classify_close(snap: dict, mark: float | None) -> str:
+    side = snap.get("side")
+    sl = snap.get("sl")
+    tp = snap.get("tp")
+    liq = snap.get("liq")
+    if mark is None:
+        return "closed"
+    if liq:
+        if side == "SHORT" and mark >= float(liq) * 0.99:
+            return "liquidated"
+        if side == "LONG" and mark <= float(liq) * 1.01:
+            return "liquidated"
+    if tp:
+        if side == "SHORT" and mark <= float(tp) * 1.01:
+            return "take-profit hit"
+        if side == "LONG" and mark >= float(tp) * 0.99:
+            return "take-profit hit"
+    if sl:
+        if side == "SHORT" and mark >= float(sl) * 0.99:
+            return "stop-loss hit"
+        if side == "LONG" and mark <= float(sl) * 1.01:
+            return "stop-loss hit"
+    return "closed"
 
 
 def once() -> None:
     from fxglitch.venues.bitunix import from_slot
 
     orig = _orig()
+    watch = _watch()
+    live_ids: set[str] = set()
     for slot in slots():
         venue = from_slot(slot)
         if not venue.authenticated:
@@ -127,16 +195,50 @@ def once() -> None:
         rows = venue.positions()
         if not rows:
             print(f"slot {slot} flat", flush=True)
-            continue
-        live_ids = {p.venue_id for p in rows}
-        for dead in [k for k in orig if k not in live_ids]:
-            orig.pop(dead, None)
-        _save_orig(orig)
+        sl_map = {}
+        tp_map = {}
+        try:
+            sl_map = venue.stops()
+            tp_map = venue.targets()
+        except Exception:
+            pass
         for pos in rows:
+            live_ids.add(pos.venue_id)
+            mark = venue.mark_price(pos.symbol)
+            watch[pos.venue_id] = {
+                "slot": slot,
+                "symbol": pos.symbol,
+                "side": pos.side,
+                "entry": pos.entry_price,
+                "qty": pos.qty,
+                "lev": pos.leverage,
+                "sl": sl_map.get(pos.venue_id),
+                "tp": tp_map.get(pos.venue_id),
+                "liq": pos.liquidation_price,
+                "mark": mark,
+            }
             try:
                 trail_one(venue, pos, orig)
             except Exception as exc:
                 print("ERR", pos.symbol, type(exc).__name__, str(exc)[:200], flush=True)
+    from fxglitch.venues.bitunix import from_slot as _slot
+    for pid, snap in list(watch.items()):
+        if pid in live_ids:
+            continue
+        mark = snap.get("mark")
+        try:
+            mark = _slot(int(snap.get("slot") or 2)).mark_price(snap.get("symbol")) or mark
+        except Exception:
+            pass
+        why = _classify_close(snap, mark)
+        alert(
+            f"{snap.get('symbol')} {snap.get('side')}: {why}.\n"
+            f"Entry {snap.get('entry')}  qty {snap.get('qty')}."
+        )
+        watch.pop(pid, None)
+        orig.pop(pid, None)
+    _save_orig(orig)
+    _save_watch(watch)
 
 
 def main() -> int:
