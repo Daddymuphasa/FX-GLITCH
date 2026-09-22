@@ -15,9 +15,14 @@ import threading
 import time
 from pathlib import Path
 
-from .protection import protect_account
 from .wa_dialog import handle
 from ..venues.bitunix import from_slot, listed_accounts
+
+try:
+    from .protection import protect_account
+except ImportError:
+    def protect_account(venue):
+        return None
 
 ROOT = Path(__file__).resolve().parents[2]
 AUTH = ROOT / "data" / "whatsapp_auth.json"
