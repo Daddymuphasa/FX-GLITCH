@@ -95,6 +95,8 @@ def _ingest_text(text: str, *, telegram_id: str, chat: str, posted_at: str | Non
         },
     )
     publish_live()
+    from .auto_trade import maybe_execute
+    maybe_execute(text, telegram_id=telegram_id, posted_at=posted_at)
 
 
 class BotBridge:

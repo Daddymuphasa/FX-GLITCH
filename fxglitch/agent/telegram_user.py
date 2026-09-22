@@ -308,6 +308,16 @@ class TelegramBridge:
             )
             from .inbox import publish_live
             await asyncio.to_thread(publish_live)
+            from .auto_trade import maybe_execute
+            posted = None
+            date = getattr(getattr(event, "message", None), "date", None)
+            if date is not None:
+                posted = date.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            await asyncio.to_thread(
+                maybe_execute, text,
+                telegram_id=f"{event.chat_id}:{event.id}",
+                posted_at=posted,
+            )
 
         if _valid_chat_id(watch):
             self._status = "watching"

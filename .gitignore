@@ -25,6 +25,7 @@ desktop.ini
 # local candle history - re-fetchable, and large
 data/candles/
 data/live_state.json
+data/protection/
 data/inbox.json
 data/auth.json
 data/books/
@@ -33,6 +34,12 @@ data/whatsapp_auth.json
 data/whatsapp_auth.json.keys
 data/whatsapp.db
 data/whatsapp_users.json
+data/auto_fills.json
+data/auto_trade.log
+data/trail_orig.json
+data/wa-link/node_modules/
+data/wa-link/auth/
+data/wa-link/qr.png
 data/telegram.session
 data/telegram.session-journal
 data/telegram_watch.json

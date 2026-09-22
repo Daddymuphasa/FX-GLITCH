@@ -1,10 +1,11 @@
-"""Trail Bitunix SL every 200% ROI. Account 2, MUBARAKUSDT short.
+"""Trail Bitunix SL every 200% ROI on every open position.
 
 At 200% move stop to entry (breakeven). At 400% lock the 200% price, etc.
-Never moves the stop against the position. Laptop can be off — run on the VPS.
+Never moves the stop against the position. Runs forever on the VPS.
 """
 from __future__ import annotations
 
+import json
 import os
 import sys
 import time
@@ -18,6 +19,10 @@ else:
     ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+ORIG = ROOT / "data" / "trail_orig.json"
+STEP = 200.0
+SLEEP = 20
+
 
 def load_env() -> None:
     path = ROOT / ".env"
@@ -29,65 +34,121 @@ def load_env() -> None:
         os.environ.setdefault(k.strip(), v.strip().strip('"').strip("'"))
 
 
-SYMBOL = "MUBARAKUSDT"
-SLOT = 2
-LEV = 5.0
-STEP = 200.0
-ORIG_SL = 0.09
-SLEEP = 20
+def slots() -> list[int]:
+    raw = os.environ.get("FXGLITCH_AUTO_SLOTS", "2")
+    out = []
+    for part in raw.split(","):
+        if part.strip().isdigit():
+            n = int(part.strip())
+            if n in (1, 2, 3):
+                out.append(n)
+    return out or [2]
 
 
-def roi_short(entry: float, mark: float, lev: float) -> float:
-    if entry <= 0:
+def _orig() -> dict:
+    try:
+        data = json.loads(ORIG.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _save_orig(data: dict) -> None:
+    ORIG.parent.mkdir(parents=True, exist_ok=True)
+    ORIG.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+
+def roi(side: str, entry: float, mark: float, lev: float) -> float:
+    if entry <= 0 or lev <= 0:
         return 0.0
-    return (entry - mark) / entry * lev * 100.0
+    if side == "SHORT":
+        return (entry - mark) / entry * lev * 100.0
+    return (mark - entry) / entry * lev * 100.0
 
 
-def lock_stop_short(entry: float, lev: float, lock_roi: float) -> float:
-    return entry * (1.0 - lock_roi / 100.0 / lev)
+def lock_price(side: str, entry: float, lev: float, lock_roi: float) -> float:
+    frac = lock_roi / 100.0 / lev
+    if side == "SHORT":
+        return entry * (1.0 - frac)
+    return entry * (1.0 + frac)
 
 
-def once() -> bool:
-    """Return False when the position is gone."""
+def trail_one(venue, pos, orig: dict) -> None:
+    mark = venue.mark_price(pos.symbol)
+    if not mark:
+        return
+    entry = float(pos.entry_price)
+    lev = float(pos.leverage or 5)
+    side = pos.side
+    r = roi(side, entry, float(mark), lev)
+    steps = int(r // STEP)
+    pid = pos.venue_id
+    resting = venue.stops(pos.symbol).get(pid)
+    if pid not in orig:
+        orig[pid] = resting if resting else (0.09 if side == "SHORT" else 0.0)
+        if side == "LONG" and not orig[pid] and pos.stop_price:
+            orig[pid] = float(pos.stop_price)
+        _save_orig(orig)
+    first_sl = float(orig.get(pid) or 0)
+    print(
+        f"{side} {pos.symbol} mark {mark} entry {entry} roi {r:.1f}% lev {lev} steps {steps}",
+        flush=True,
+    )
+    if steps < 1:
+        return
+    lock_roi = (steps - 1) * STEP
+    new_sl = lock_price(side, entry, lev, lock_roi)
+    if side == "SHORT":
+        if first_sl:
+            new_sl = min(first_sl, new_sl)
+        if new_sl <= float(mark) * 1.002:
+            return
+        if resting is not None and new_sl >= resting - 1e-12:
+            return
+    else:
+        if first_sl:
+            new_sl = max(first_sl, new_sl)
+        if new_sl >= float(mark) * 0.998:
+            return
+        if resting is not None and new_sl <= resting + 1e-12:
+            return
+    result = venue.set_stop(pos, new_sl)
+    print("TRAIL", pos.symbol, "sl", new_sl, "lock_roi", lock_roi, result.venue_order_id, flush=True)
+
+
+def once() -> None:
     from fxglitch.venues.bitunix import from_slot
 
-    venue = from_slot(SLOT)
-    rows = [p for p in venue.positions(SYMBOL) if p.side == "SHORT"]
-    if not rows:
-        print("FLAT", flush=True)
-        return False
-    pos = rows[0]
-    mark = venue.mark_price(SYMBOL) or pos.entry_price
-    entry = float(pos.entry_price)
-    roi = roi_short(entry, float(mark), LEV)
-    steps = int(roi // STEP)
-    print(f"mark {mark} entry {entry} roi {roi:.1f}% steps {steps}", flush=True)
-    if steps < 1:
-        return True
-    lock_roi = (steps - 1) * STEP
-    new_sl = lock_stop_short(entry, LEV, lock_roi)
-    new_sl = min(ORIG_SL, new_sl)
-    if new_sl <= float(mark) * 1.002:
-        print("skip sl would be at/through mark", new_sl, mark, flush=True)
-        return True
-    resting = venue.stops(SYMBOL).get(pos.venue_id)
-    if resting is not None and new_sl >= resting - 1e-8:
-        return True
-    result = venue.set_stop(pos, new_sl)
-    print("TRAIL sl", new_sl, "lock_roi", lock_roi, "order", result.venue_order_id, flush=True)
-    return True
+    orig = _orig()
+    for slot in slots():
+        venue = from_slot(slot)
+        if not venue.authenticated:
+            continue
+        rows = venue.positions()
+        if not rows:
+            print(f"slot {slot} flat", flush=True)
+            continue
+        live_ids = {p.venue_id for p in rows}
+        for dead in [k for k in orig if k not in live_ids]:
+            orig.pop(dead, None)
+        _save_orig(orig)
+        for pos in rows:
+            try:
+                trail_one(venue, pos, orig)
+            except Exception as exc:
+                print("ERR", pos.symbol, type(exc).__name__, str(exc)[:200], flush=True)
 
 
 def main() -> int:
     load_env()
-    print("trail 200% on", SYMBOL, "slot", SLOT, flush=True)
+    print("trail 200% slots", slots(), flush=True)
     while True:
         try:
-            if not once():
-                return 0
+            once()
         except Exception as exc:
             print("ERR", type(exc).__name__, str(exc)[:250], flush=True)
         time.sleep(SLEEP)
+    return 0
 
 
 if __name__ == "__main__":
