@@ -1,0 +1,13 @@
+[Unit]
+Description=FX-GLITCH trail stop 200% (MUBARAK short)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=10
+ExecStart=/usr/bin/docker exec -i fx-glitch-desk-1 python /app/tools/trail_200.py
+
+[Install]
+WantedBy=multi-user.target
