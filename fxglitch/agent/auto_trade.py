@@ -156,23 +156,17 @@ def _send(text: str, telegram_id: str, posted_at: str | None) -> dict:
             if force.isdigit():
                 lev = max(1, min(int(force), inst.max_leverage))
             entry_px = float(mark or rec.entry or 0)
-            stop_px = float(stop)
-            dist = abs(entry_px - stop_px)
-            if entry_px <= 0 or dist <= 0:
-                errors.append(f"slot {slot} bad entry/stop")
+            if entry_px <= 0:
+                errors.append(f"slot {slot} no entry")
                 continue
-            risk = risk_usd()
-            raw_qty = risk / dist
+            margin = risk_usd()
+            # $margin is collateral in the trade, not stop-loss. qty * entry / lev ≈ $5.
+            raw_qty = margin * lev / entry_px
             qty = inst.round_qty(raw_qty)
             if qty < inst.min_qty:
-                min_risk = float(inst.min_qty) * dist
-                if min_risk <= risk * 1.3:
-                    qty = inst.min_qty
-                else:
-                    errors.append(f"slot {slot} min size risks ${min_risk:.2f} > ${risk:.2f}")
-                    continue
+                qty = inst.min_qty
             bal = venue.balance()
-            max_qty = inst.round_qty((float(bal.available) * lev / entry_px) * 0.85)
+            max_qty = inst.round_qty((float(bal.available) / entry_px) * lev * 0.85)
             if max_qty > 0 and qty > max_qty:
                 qty = max_qty
             ok, why = inst.fits(qty)
@@ -189,8 +183,8 @@ def _send(text: str, telegram_id: str, posted_at: str | None) -> dict:
                 client_id=f"fxg-auto-{telegram_id}"[:36],
                 reason=f"auto Cosmas {rec.direction} {symbol} CROSS {lev}x",
             ))
-            sent.append({"slot": slot, "order": order.venue_order_id, "qty": str(qty), "lev": lev, "margin": "CROSS", "risk": risk})
-            _log(f"sent {symbol} {rec.direction} CROSS {lev}x risk ${risk:.2f} qty {qty} slot {slot} {order.venue_order_id}")
+            sent.append({"slot": slot, "order": order.venue_order_id, "qty": str(qty), "lev": lev, "margin": "CROSS", "stake": margin})
+            _log(f"sent {symbol} {rec.direction} CROSS {lev}x stake ${margin:.2f} qty {qty} slot {slot} {order.venue_order_id}")
         except VenueError as exc:
             errors.append(str(exc)[:200])
             _log(f"fail {telegram_id} {exc}")
