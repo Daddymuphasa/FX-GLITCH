@@ -22,8 +22,8 @@ sys.path.insert(0, str(ROOT))
 
 ORIG = ROOT / "data" / "trail_orig.json"
 WATCH = ROOT / "data" / "trail_watch.json"
-STEP = 200.0
-SLEEP = 20
+STEP = float(os.environ.get("FXGLITCH_TRAIL_STEP", "100"))
+SLEEP = int(os.environ.get("FXGLITCH_TRAIL_SLEEP", "60"))
 DESK = os.environ.get("FXG_DESK", "http://127.0.0.1:8765")
 
 
@@ -112,20 +112,22 @@ def trail_one(venue, pos, orig: dict) -> None:
     lev = float(pos.leverage or 5)
     side = pos.side
     r = roi(side, entry, float(mark), lev)
-    steps = int(r // STEP)
+    steps = max(0, int(r // STEP))
     pid = pos.venue_id
     resting = venue.stops(pos.symbol).get(pid)
-    if pid not in orig:
-        orig[pid] = resting if resting else (0.09 if side == "SHORT" else 0.0)
-        if side == "LONG" and not orig[pid] and pos.stop_price:
-            orig[pid] = float(pos.stop_price)
+    meta = orig.get(pid)
+    if isinstance(meta, (int, float)):
+        meta = {"sl": float(meta), "step": 0}
+    if not isinstance(meta, dict):
+        meta = {
+            "sl": float(resting or (pos.stop_price or 0) or 0),
+            "step": 0,
+        }
+        orig[pid] = meta
         _save_orig(orig)
-    first_sl = float(orig.get(pid) or 0)
-    print(
-        f"{side} {pos.symbol} mark {mark} entry {entry} roi {r:.1f}% lev {lev} steps {steps}",
-        flush=True,
-    )
-    if steps < 1:
+    last_step = int(meta.get("step") or 0)
+    first_sl = float(meta.get("sl") or 0)
+    if steps <= last_step:
         return
     lock_roi = (steps - 1) * STEP
     new_sl = lock_price(side, entry, lev, lock_roi)
@@ -134,25 +136,26 @@ def trail_one(venue, pos, orig: dict) -> None:
             new_sl = min(first_sl, new_sl)
         if new_sl <= float(mark) * 1.002:
             return
-        if resting is not None and new_sl >= resting - 1e-12:
+        if resting is not None and new_sl >= resting - 1e-12 and steps <= last_step:
             return
     else:
         if first_sl:
             new_sl = max(first_sl, new_sl)
         if new_sl >= float(mark) * 0.998:
             return
-        if resting is not None and new_sl <= resting + 1e-12:
+        if resting is not None and new_sl <= resting + 1e-12 and steps <= last_step:
             return
     result = venue.set_stop(pos, new_sl)
-    print("TRAIL", pos.symbol, "sl", new_sl, "lock_roi", lock_roi, result.venue_order_id, flush=True)
+    meta["step"] = steps
+    orig[pid] = meta
+    _save_orig(orig)
+    print("TRAIL", pos.symbol, "roi", round(r, 1), "sl", new_sl, result.venue_order_id, flush=True)
+    pct = int(steps * STEP)
     if lock_roi <= 0:
-        alert(
-            f"{pos.symbol} {side}: 200% in profit.\n"
-            f"Stop moved to breakeven ({new_sl:.6g})."
-        )
+        alert(f"{pos.symbol} {side}: {pct}% in profit.\nStop moved to breakeven ({new_sl:.6g}).")
     else:
         alert(
-            f"{pos.symbol} {side}: another 200% in profit.\n"
+            f"{pos.symbol} {side}: {pct}% in profit.\n"
             f"Stop trailed to lock {lock_roi:.0f}% ({new_sl:.6g})."
         )
 
