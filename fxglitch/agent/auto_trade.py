@@ -144,6 +144,10 @@ def _send(text: str, telegram_id: str, posted_at: str | None) -> dict:
             if not ok:
                 errors.append(f"slot {slot} {why}")
                 continue
+            try:
+                venue.set_margin_mode(symbol, "CROSS")
+            except VenueError:
+                pass
             venue.set_leverage(symbol, min(lev, inst.max_leverage))
             order = venue.place(OrderRequest(
                 symbol=symbol,

@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
+from math import isfinite
 
 from ..engine import LONG, SHORT
 from ..live.guards import Limits, Verdict, check_all, check_balance, check_capacity, check_daily_loss, check_risk, check_stop
@@ -36,6 +37,7 @@ class ProposedTrade:
     take_profit: float | None = None
     reason: str = ""
     source: str = "agent"
+    cost_pct_per_side: float = 0.0
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -66,12 +68,12 @@ def _size(proposal: ProposedTrade, entry: float, stop: float, equity: float) -> 
     """qty, notional, cash at risk. Stop distance is the risk unit (1R)."""
     risk_pct = min(proposal.risk_pct, 100.0)
     cash_at_risk = equity * risk_pct / 100.0
-    stop_dist = abs(entry - stop)
+    stop_dist = abs(entry - stop) + (entry + stop) * proposal.cost_pct_per_side / 100.0
     if stop_dist <= 0 or entry <= 0:
         return 0.0, 0.0, cash_at_risk
-    qty = cash_at_risk / stop_dist
+    qty = proposal.qty if proposal.qty is not None else cash_at_risk / stop_dist
     notional = qty * entry
-    return qty, notional, cash_at_risk
+    return qty, notional, qty * stop_dist
 
 
 def evaluate(
@@ -107,6 +109,11 @@ def evaluate(
         return PolicyDecision(False, f"unknown action {proposal.action!r}", checks=checks)
 
     if proposal.action == "open":
+        if not all(isfinite(x) for x in (proposal.risk_pct, proposal.cost_pct_per_side)) or \
+                not 0 < proposal.risk_pct <= 100 or proposal.cost_pct_per_side < 0:
+            return PolicyDecision(False, "invalid risk or cost allowance", checks=checks)
+        if proposal.qty is not None and (not isfinite(proposal.qty) or proposal.qty <= 0):
+            return PolicyDecision(False, "quantity must be finite and positive", checks=checks)
         if proposal.direction not in ("LONG", "SHORT"):
             return PolicyDecision(False, "open requires direction LONG or SHORT", checks=checks)
 
@@ -123,7 +130,7 @@ def evaluate(
         entry = proposal.entry
         if entry is None and briefing is not None:
             entry = briefing.mark_price
-        if entry is None or entry <= 0:
+        if entry is None or not isfinite(entry) or entry <= 0:
             return PolicyDecision(False, "no mark/entry price to size against", checks=checks)
 
         stop = proposal.stop
@@ -135,6 +142,9 @@ def evaluate(
         v_stop = record("stop", check_stop(stop, entry, side, limits))
         if not v_stop:
             return PolicyDecision(False, v_stop.reason, fatal=v_stop.fatal, checks=checks)
+        tp = proposal.take_profit
+        if tp is not None and (not isfinite(tp) or tp <= 0 or (tp - entry) * side <= 0):
+            return PolicyDecision(False, "take-profit must be on the profitable side of entry", checks=checks)
 
         v_cap = record("capacity", check_capacity(positions, proposal.symbol, limits))
         if not v_cap:

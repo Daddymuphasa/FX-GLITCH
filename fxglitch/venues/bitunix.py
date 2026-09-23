@@ -536,6 +536,19 @@ class Bitunix(Venue):
             private=True,
         )
 
+    def set_margin_mode(self, symbol: str, mode: str = "CROSS", margin_coin: str = "USDT") -> dict:
+        """CROSS or ISOLATION. Next orders (and this symbol if the venue allows)."""
+        mode = "CROSS" if str(mode).upper().startswith("C") else "ISOLATION"
+        return self._request(
+            "POST", "/api/v1/futures/account/change_margin_mode",
+            payload={
+                "symbol": symbol,
+                "marginCoin": margin_coin,
+                "marginMode": mode,
+            },
+            private=True,
+        )
+
     def position_mode(self) -> str:
         """HEDGE or ONE_WAY. Read once, then cached.
 
