@@ -25,6 +25,15 @@ LOCK = threading.Lock()
 MAX_AGE_HOURS = 4
 
 
+def risk_usd() -> float:
+    raw = os.environ.get("FXGLITCH_AUTO_RISK", "5")
+    try:
+        value = float(raw)
+    except ValueError:
+        value = 5.0
+    return value if value > 0 else 5.0
+
+
 def _now() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -138,11 +147,6 @@ def _send(text: str, telegram_id: str, posted_at: str | None) -> dict:
             if inst is None or not inst.tradeable:
                 errors.append(f"slot {slot} {symbol} not listed")
                 continue
-            qty = inst.min_qty
-            ok, why = inst.fits(qty)
-            if not ok:
-                errors.append(f"slot {slot} {why}")
-                continue
             try:
                 venue.set_margin_mode(symbol, "CROSS")
             except VenueError:
@@ -151,6 +155,30 @@ def _send(text: str, telegram_id: str, posted_at: str | None) -> dict:
             force = os.environ.get("FXGLITCH_AUTO_LEV", "").strip()
             if force.isdigit():
                 lev = max(1, min(int(force), inst.max_leverage))
+            entry_px = float(mark or rec.entry or 0)
+            stop_px = float(stop)
+            dist = abs(entry_px - stop_px)
+            if entry_px <= 0 or dist <= 0:
+                errors.append(f"slot {slot} bad entry/stop")
+                continue
+            risk = risk_usd()
+            raw_qty = risk / dist
+            qty = inst.round_qty(raw_qty)
+            if qty < inst.min_qty:
+                min_risk = float(inst.min_qty) * dist
+                if min_risk <= risk * 1.3:
+                    qty = inst.min_qty
+                else:
+                    errors.append(f"slot {slot} min size risks ${min_risk:.2f} > ${risk:.2f}")
+                    continue
+            bal = venue.balance()
+            max_qty = inst.round_qty((float(bal.available) * lev / entry_px) * 0.85)
+            if max_qty > 0 and qty > max_qty:
+                qty = max_qty
+            ok, why = inst.fits(qty)
+            if not ok:
+                errors.append(f"slot {slot} {why}")
+                continue
             venue.set_leverage(symbol, lev)
             order = venue.place(OrderRequest(
                 symbol=symbol,
@@ -161,8 +189,8 @@ def _send(text: str, telegram_id: str, posted_at: str | None) -> dict:
                 client_id=f"fxg-auto-{telegram_id}"[:36],
                 reason=f"auto Cosmas {rec.direction} {symbol} CROSS {lev}x",
             ))
-            sent.append({"slot": slot, "order": order.venue_order_id, "qty": str(qty), "lev": lev, "margin": "CROSS"})
-            _log(f"sent {symbol} {rec.direction} CROSS {lev}x slot {slot} {order.venue_order_id}")
+            sent.append({"slot": slot, "order": order.venue_order_id, "qty": str(qty), "lev": lev, "margin": "CROSS", "risk": risk})
+            _log(f"sent {symbol} {rec.direction} CROSS {lev}x risk ${risk:.2f} qty {qty} slot {slot} {order.venue_order_id}")
         except VenueError as exc:
             errors.append(str(exc)[:200])
             _log(f"fail {telegram_id} {exc}")
