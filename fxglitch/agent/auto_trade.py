@@ -16,7 +16,7 @@ from pathlib import Path
 from ..signal_copy import parse_signal
 from ..venues.base import LONG, SHORT, OrderRequest, VenueError
 from ..venues.bitunix import from_slot
-from .plans import fetch_mark, live_entry_check, recommend
+from .plans import TIERS, _leverage, fetch_mark, live_entry_check, recommend
 
 ROOT = Path(__file__).resolve().parents[2]
 FILLS = ROOT / "data" / "auto_fills.json"
@@ -124,8 +124,7 @@ def _send(text: str, telegram_id: str, posted_at: str | None) -> dict:
     if stop is None or tp is None:
         _log(f"skip {telegram_id} missing sl/tp")
         return {"ok": False, "reason": "need stop and take-profit", "id": telegram_id}
-    lev = int(rec.signal_leverage or 5)
-    lev = max(1, min(lev, 25))
+    dare = next(t for t in TIERS if t["id"] == "daredevil")
     side = LONG if rec.direction == "LONG" else SHORT
     sent = []
     errors = []
@@ -148,7 +147,11 @@ def _send(text: str, telegram_id: str, posted_at: str | None) -> dict:
                 venue.set_margin_mode(symbol, "CROSS")
             except VenueError:
                 pass
-            venue.set_leverage(symbol, min(lev, inst.max_leverage))
+            lev = _leverage(rec.signal_leverage, dare, inst.max_leverage)
+            force = os.environ.get("FXGLITCH_AUTO_LEV", "").strip()
+            if force.isdigit():
+                lev = max(1, min(int(force), inst.max_leverage))
+            venue.set_leverage(symbol, lev)
             order = venue.place(OrderRequest(
                 symbol=symbol,
                 direction=side,
@@ -156,10 +159,10 @@ def _send(text: str, telegram_id: str, posted_at: str | None) -> dict:
                 stop_price=Decimal(str(stop)),
                 take_profit=Decimal(str(tp)),
                 client_id=f"fxg-auto-{telegram_id}"[:36],
-                reason=f"auto Cosmas {rec.direction} {symbol}",
+                reason=f"auto Cosmas {rec.direction} {symbol} CROSS {lev}x",
             ))
-            sent.append({"slot": slot, "order": order.venue_order_id, "qty": str(qty)})
-            _log(f"sent {symbol} {rec.direction} slot {slot} {order.venue_order_id}")
+            sent.append({"slot": slot, "order": order.venue_order_id, "qty": str(qty), "lev": lev, "margin": "CROSS"})
+            _log(f"sent {symbol} {rec.direction} CROSS {lev}x slot {slot} {order.venue_order_id}")
         except VenueError as exc:
             errors.append(str(exc)[:200])
             _log(f"fail {telegram_id} {exc}")
