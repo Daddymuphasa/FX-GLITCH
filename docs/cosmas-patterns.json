@@ -1,0 +1,219 @@
+{
+  "meta": {
+    "built_at": "2026-10-01T02:30:00+01:00",
+    "revised_from": "2026-09-29T20:55:00+01:00",
+    "timezone": "Africa/Lagos",
+    "chat_id": "-1002004401199",
+    "chat_title": "Cosmas trading/forex signals.",
+    "public_handle": "https://t.me/cosmasanalyst",
+    "public_history_available": false,
+    "data_quality": "thin",
+    "real_cosmas_messages": 4,
+    "real_entry_signals": 1,
+    "unique_items_studied": 6,
+    "proven_tp_before_sl": 0,
+    "self_scan_feasible": false,
+    "self_scan_reason": "Public t.me does not publish this group's history. Local inbox.json is still the 2026-09-06 snapshot (6703 bytes). The only dated entry, PIPPINUSDT long, has not touched TP 0.8 or SL 0.013 through the 2026-10-01 00:00 UTC hourly bar.",
+    "best_next_access": "Telegram Desktop export of the group to a JSON/HTML file under Documents\\GitHub\\FX-GLITCH\\data. Not public t.me. Do not send session files or API keys.",
+    "sources": [
+      "https://t.me/s/cosmasanalyst",
+      "https://fxglitch.xyz/live-signals.json",
+      "https://fxglitch.xyz/api/signals",
+      "https://fxglitch.xyz/api/inbox",
+      "Documents/GitHub/FX-GLITCH/data/inbox.json",
+      "fx-glitch/tests/test_signal_copy.py",
+      "Bitunix public futures klines fapi.bitunix.com"
+    ]
+  },
+  "real_messages": [
+    {
+      "id": "-1002004401199:21566",
+      "posted_at": "2026-09-06T00:23:19Z",
+      "posted_at_lagos": "2026-09-06T01:23:19+01:00",
+      "kind": "entry",
+      "symbol": "PIPPINUSDT",
+      "side": "LONG",
+      "entry": "CMP",
+      "entry_mark": 0.01976573,
+      "stop": 0.013,
+      "take_profits": [
+        0.8
+      ],
+      "leverage": 7,
+      "stop_pct_under_mark": 34.2,
+      "tp_multiple_of_mark": 40.5,
+      "stop_vs_structure": "5.9% above the June 2026 daily low 0.01227",
+      "tp_vs_structure": "0.8 is 88% of the Feb 2026 high 0.90759, one significant figure under that high (Dec 2025 high 0.75)",
+      "outcome": "neither_tp_nor_sl",
+      "outcome_as_of": "2026-10-01T00:00:00Z",
+      "outcome_notes": "600 hourly bars. High 0.02028, low 0.01626, last close 0.01886. MFE +2.6%, MAE -17.7% vs mark 0.01977. Not a successful trade.",
+      "successful_tp_before_sl": false
+    },
+    {
+      "id": "-1002004401199:21568",
+      "posted_at": "2026-09-06T17:19:09Z",
+      "posted_at_lagos": "2026-09-06T18:19:09+01:00",
+      "kind": "hold_update",
+      "basket": [
+        "PONSUSDT",
+        "KAITOUSDT",
+        "MARSCOINUSDT",
+        "PIPPINUSDT"
+      ],
+      "raw_excerpt": "Retracement is part of the market. Pons, Kaito, Marscoin, Pippin. Holding. Check out your profit on kaito.",
+      "outcome": "admin_claim_only",
+      "outcome_notes": "KAITO September 2026 daily range 0.2786-0.3759. TP 1.5 from the fixture was not in range. Claim is not a fill."
+    },
+    {
+      "id": "-1002004401199:21569",
+      "posted_at_received": "2026-09-06T17:40:21Z",
+      "kind": "noise",
+      "raw_excerpt": "Educational contents"
+    },
+    {
+      "id": "-1002004401199:21570",
+      "posted_at_received": "2026-09-06T17:44:21Z",
+      "kind": "noise",
+      "raw_excerpt": "Naira exchange promo. Not a trade."
+    }
+  ],
+  "undated_fixtures": [
+    {
+      "id": "fixture:kaito",
+      "symbol": "KAITOUSDT",
+      "side": "LONG",
+      "entry": "CMP",
+      "stop": 0.25,
+      "take_profits": [
+        1.5
+      ],
+      "leverage": 10,
+      "source": "tests/test_signal_copy.py",
+      "price_context": "2026 daily high 1.3706 (July). TP 1.5 not printed in 2026. Oct 2025 high 1.5036. Sep 2026 range 0.2786-0.3759, so SL 0.25 not hit that month.",
+      "successful_tp_before_sl": null,
+      "why_unscored": "No post timestamp, so first-touch cannot be assigned to this signal."
+    },
+    {
+      "id": "fixture:pons",
+      "symbol": "PONSUSDT",
+      "side": "LONG",
+      "entry": null,
+      "entry_notes": "Am targeting long \u2014 no CMP",
+      "stop": 0.44,
+      "take_profits": [
+        1.5
+      ],
+      "leverage": 10,
+      "narrative_tags": [
+        "whale",
+        "new_listing"
+      ],
+      "price_context": "First daily bar 2026-09-02. September high 0.9788, low 0.3566. TP 1.5 never traded. SL 0.44 was traded through.",
+      "successful_tp_before_sl": false,
+      "why": "Take-profit never printed on Bitunix daily data through 2026-09-30. Cannot be a TP-before-SL win regardless of entry time."
+    },
+    {
+      "id": "fixture:pieverse-sl-adjust",
+      "symbol": "PIEVERSEUSDT",
+      "kind": "stop_adjustment",
+      "stop_adjust_to": 1.0,
+      "also_in_text": {
+        "tp": 0.3,
+        "sl": 0.93
+      },
+      "price_context": "September 2026 daily low 1.0075, high 2.0321. $1 is that month's floor.",
+      "successful_tp_before_sl": null,
+      "why_unscored": "Not a new entry. Original entry unknown."
+    },
+    {
+      "id": "named:marscoin",
+      "symbol": "MARSCOINUSDT",
+      "kind": "named_in_hold_basket",
+      "price_context": "First daily bar 2026-09-02. September high 0.26772, low 0.05217.",
+      "successful_tp_before_sl": null
+    }
+  ],
+  "tp_sl_rules": [
+    {
+      "id": "cmp_entry",
+      "plain": "The dated signal enters at market (CMP), not a limit.",
+      "numbers": "PIPPIN mark at ingest 0.01977",
+      "confidence": "high"
+    },
+    {
+      "id": "single_tp_sl",
+      "plain": "Live text has one TP and one SL as bare numbers.",
+      "numbers": "Tp 0.8, Sl 0.01300",
+      "confidence": "high"
+    },
+    {
+      "id": "sl_under_base",
+      "plain": "Stop sits just above the multi-month low, which on this trade was about a third under the mark.",
+      "numbers": "SL 0.013 is 34.2% under 0.01977 and 5.9% above the June 2026 low 0.01227",
+      "confidence": "medium"
+    },
+    {
+      "id": "tp_round_prior_high",
+      "plain": "TP looks like the prior cycle high rounded down to one significant figure, not a 2R target.",
+      "numbers": "0.8 vs Feb 2026 high 0.90759 (88%) and Dec 2025 high 0.75; about 40.5x the mark",
+      "confidence": "medium"
+    },
+    {
+      "id": "listing_tp_round_number",
+      "plain": "On a new listing the fixture TP can be a round number that price has never traded.",
+      "numbers": "PONS Tp 1.5 vs high since list 0.9788",
+      "confidence": "low"
+    },
+    {
+      "id": "leverage_band",
+      "plain": "Posted leverage is 7x on the live trade and 10x on fixtures.",
+      "numbers": "7 and 10",
+      "confidence": "medium"
+    },
+    {
+      "id": "hold_language",
+      "plain": "He tells the group to hold named coins through a retracement and later lifts a stop toward a new floor.",
+      "numbers": "Pieverse SL to $1 vs Sep 2026 low 1.0075",
+      "confidence": "high_for_management"
+    }
+  ],
+  "how_to_scan_and_suggest": {
+    "feasible": false,
+    "label_required": "hypothesis, not a Cosmas signal",
+    "confidence": "low",
+    "screen_a_washed_out_alt": {
+      "universe": "Bitunix USDT-M futures, exclude BTCUSDT and ETHUSDT",
+      "filters": [
+        "mark at least 80% below the 180-day high",
+        "mark within 25% of the 90-day low",
+        "enough 24h quote volume to fill a small order",
+        "SL = lowest daily low of ~120 days, placed about 6% above that low, and 20-45% under the mark",
+        "TP = 180-365 day high rounded down to one significant figure, and at least 5x the mark",
+        "text leverage 7x; desk size uses its own risk tiers"
+      ],
+      "do_not": "Treat the far TP as a likely full exit. PIPPIN +2.6% / -17.7% after 25 days."
+    },
+    "screen_b_new_listing": {
+      "filters": [
+        "first daily bar within 14 days",
+        "price still above the listing-day low",
+        "price not already more than 8x the listing-day low"
+      ],
+      "do_not": "Attach a TP or SL, or say buy. Name only, until a dated listing signal exists."
+    },
+    "skip": [
+      "education and cash or Naira promos",
+      "affiliate footer with no levels",
+      "stop-adjustment messages as new entries",
+      "targeting-long lines with no CMP",
+      "shorts",
+      "BTC demo samples"
+    ]
+  },
+  "blocker": {
+    "what": "Group history is not on the public Telegram preview, and the saved inbox never grew past 2026-09-06.",
+    "public_tme": "https://t.me/s/cosmasanalyst returns the welcome text only (0 message widgets).",
+    "local_inbox": "Documents\\GitHub\\FX-GLITCH\\data\\inbox.json is 6703 bytes, last write 2026-09-06 19:41 Lagos.",
+    "best_next_path": "Export the group from Telegram Desktop to JSON or HTML. Public t.me will not provide this history."
+  }
+}

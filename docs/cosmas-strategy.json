@@ -1,0 +1,694 @@
+{
+  "meta": {
+    "version": "1.0.0",
+    "document_id": "cosmas-strategy",
+    "built_at": "2026-10-01T02:37:00+01:00",
+    "timezone": "Africa/Lagos",
+    "built_from": [
+      "/workspace/fx-glitch-knowledge/cosmas-admin-playbook.md",
+      "/workspace/fx-glitch-knowledge/cosmas-patterns.json",
+      "/workspace/fx-glitch/fxglitch/signal_copy.py",
+      "/workspace/fx-glitch/fxglitch/agent/auto_trade.py",
+      "/workspace/fx-glitch/fxglitch/agent/plans.py",
+      "/workspace/fx-glitch/tools/trail_200.py",
+      "/workspace/fx-glitch/docs/INTELLIGENCE.md",
+      "/workspace/fx-glitch/tests/test_signal_copy.py",
+      "Bitunix public futures klines and tickers, fapi.bitunix.com, fetched 2026-10-01 ~02:35 Africa/Lagos",
+      "Public web pages fetched the same session (listed under news_and_ecosystem)"
+    ],
+    "data_quality": "thin",
+    "real_cosmas_messages": 4,
+    "real_entry_signals": 1,
+    "proven_winners": 0,
+    "proven_winners_definition": "Dated Cosmas entry whose take-profit printed before its stop on Bitunix futures. Count is 0 of 1.",
+    "self_scan_feasible": false,
+    "honesty_limits": [
+      "Do not claim a win rate, expectancy, or that this style is profitable. It is not proven.",
+      "Do not invent Cosmas messages, fills, catalysts, or TP/SL levels that are not in the sourced texts.",
+      "Public t.me/s/cosmasanalyst does not publish this group's history. Saved inbox stops on 2026-09-06.",
+      "KAITO, PONS, and PIEVERSE numbers below are parser fixtures, not dated group posts, except where the 2026-09-06 hold post names the coin.",
+      "Binance public REST returned HTTP 451 from this host. Prices are Bitunix USDT-M futures, not Binance spot.",
+      "The 2026-10-01 daily bar was not closed at build time. Last completed daily bar is 2026-09-30.",
+      "A secondary article that disagrees with another secondary article is not a fact. Exchange OHLC is the price fact.",
+      "FX-GLITCH docs/INTELLIGENCE.md is a different system (BTC Donchian plus sizing). Do not paste it onto Cosmas as his method."
+    ]
+  },
+  "identity": {
+    "who": "In this system Cosmas is the admin voice of the Telegram group titled 'Cosmas trading/forex signals.'",
+    "chat_id": "-1002004401199",
+    "chat_title": "Cosmas trading/forex signals.",
+    "public_handle": "https://t.me/cosmasanalyst",
+    "public_preview": "https://t.me/s/cosmasanalyst",
+    "preview_note": "Group, not a channel. Playbook (2026-10-01) says about 6,290 members. Public preview returns the welcome blurb only. No message widgets and no history.",
+    "venue": "Bitunix USDT-M perpetual futures. Symbols are concatenated, e.g. PIPPINUSDT. Quotes in USDT.",
+    "what_this_is": "A portable style card another agent can use to parse his template and, separately, to sketch low-confidence hypothesis cards that mimic the shape of the one dated entry. Every hypothesis must be labeled as such.",
+    "what_this_is_not": [
+      "Not a profitable or validated trading system.",
+      "Not permission to place, modify, or cancel orders.",
+      "Not the FX-GLITCH Donchian, squeeze, confluence, or intelligence-layer strategy in docs/INTELLIGENCE.md.",
+      "Not a biography. A 2026-07 LinkedIn mention of t.me/cosmasanalyst is only in the playbook and was not re-fetched.",
+      "Not the Bitunix deposit-bonus page activity/exclusive/Cosmas0404. The playbook says that page is an ended bonus, not signals. Not re-fetched here.",
+      "Not a copy of his personal account size. Posted leverage is not position size."
+    ]
+  },
+  "entry_method": {
+    "template": "{Symbol}/usdt\nLong position\nEntry CMP\nTp {one number}\nSl {one number}\nLeverage {7x on the only live post}\n\nNight research let's go",
+    "cmp": {
+      "meaning": "Current market price. Market entry. No limit ladder in any sourced text.",
+      "confidence": "high",
+      "n": "1 dated entry (PIPPIN) plus the KAITO fixture. PONS fixture has no CMP and the parser correctly refuses to open it."
+    },
+    "direction_bias_observed": {
+      "observed": "LONG only",
+      "confidence": "medium",
+      "limit": "No Cosmas short text exists in the sample. The sample is too small to call long-only a rule. Do not invent shorts. Do not treat 'no short seen' as a proven ban on shorts he might post later."
+    },
+    "parser_contract": {
+      "module": "fxglitch/signal_copy.py parse_signal",
+      "opens_only_if": "symbol, one direction, stop, and either CMP or a numeric entry, and the message is not a stop adjustment, and there are no warnings",
+      "rejects": [
+        "both long and short in one text",
+        "missing direction",
+        "entry missing and not CMP",
+        "missing stop",
+        "missing USDT symbol",
+        "adjust your sl (stop_adjustment=true, can_open=false)"
+      ],
+      "notes_keywords": [
+        "scalping",
+        "whale",
+        "holding tight"
+      ],
+      "multi_tp": "The parser accepts tp1..tp5. No Cosmas text in the sample uses partial TPs. Do not add partials he did not write."
+    },
+    "symbol_universe_observed": {
+      "dated_entry": [
+        "PIPPINUSDT"
+      ],
+      "named_in_hold_post_2026_09_06": [
+        "PONSUSDT",
+        "KAITOUSDT",
+        "MARSCOINUSDT",
+        "PIPPINUSDT"
+      ],
+      "fixtures_only": [
+        "KAITOUSDT",
+        "PONSUSDT",
+        "PIEVERSEUSDT"
+      ],
+      "scan_universe_if_mimicking_shape": "Bitunix USDT-M futures, exclude BTCUSDT and ETHUSDT. He did not post a BTC or ETH entry in the sample. Demo BTCUSDT rows in the desk inbox are not Cosmas.",
+      "not_seen": "Breakout scalps, FX pairs, gold, tight percent stops, short setups."
+    },
+    "style_labels_hypothesis_only": [
+      {
+        "label": "washed_out_alt_hold_the_base",
+        "evidence": "PIPPIN mark ~97.8% under the 2026-02-26 high, SL just above the 2026-06-06 low, phrase 'Night research let's go'.",
+        "confidence": "medium_for_this_one_trade",
+        "outcome": "not a win as of 2026-10-01"
+      },
+      {
+        "label": "new_listing_bag",
+        "evidence": "PONSUSDT and MARSCOINUSDT first Bitunix daily bar 2026-09-02, then both names appear in the 2026-09-06 hold list.",
+        "confidence": "medium_that_he_names_fresh_listings",
+        "outcome": "no dated SL/TP to copy"
+      },
+      {
+        "label": "whale_narrative",
+        "evidence": "PONS fixture line 'has a whale's' only.",
+        "confidence": "low"
+      },
+      {
+        "label": "hold_bag_management",
+        "evidence": "Hold post plus undated Pieverse SL lift.",
+        "confidence": "high_that_he_manages_a_named_basket_this_way",
+        "not": "Not an entry scan."
+      },
+      {
+        "label": "breakout_scalp",
+        "evidence": "Not seen. PIPPIN was not a breakout.",
+        "confidence": "do_not_scan_for_this_in_his_name"
+      }
+    ]
+  },
+  "risk_management": {
+    "stop_placement": {
+      "rule_in_plain_language": "On the only dated trade the stop is a wide base stop: just above the multi-month low, about a third under the mark. It is not an ATR scalp and not a 1-2% stop.",
+      "confidence": "medium",
+      "pippin_math": {
+        "symbol": "PIPPINUSDT",
+        "side": "LONG",
+        "posted_at_utc": "2026-09-06T00:23:19Z",
+        "posted_at_lagos": "2026-09-06T01:23:19+01:00",
+        "entry_type": "CMP",
+        "desk_mark_at_ingest": 0.01976573,
+        "desk_mark_rounded": 0.01977,
+        "stop": 0.013,
+        "stop_distance": 0.00676573,
+        "stop_pct_under_mark": 34.23,
+        "stop_pct_formula": "(0.01976573 - 0.013) / 0.01976573 = 0.3423",
+        "june_2026_daily_low": {
+          "price": 0.01227,
+          "date": "2026-06-06",
+          "source": "Bitunix PIPPINUSDT 1d kline fetched 2026-10-01"
+        },
+        "stop_vs_that_low": "0.013 is 5.95% above 0.01227. (0.013 / 0.01227 - 1) = 0.0595",
+        "screen_band_used_when_mimicking": "Place SL about 5-8% above the lowest daily low of the last ~120 days, and require that SL to sit 20-45% under the mark. PIPPIN was 34%. A tighter stop is a different strategy. Reject the mimic if it fails that band.",
+        "not_a_proven_rule": "This is one trade's geometry. Do not tighten it into a law."
+      },
+      "leverage_and_whether_the_stop_is_reachable": {
+        "posted_leverage_on_this_trade": 7,
+        "adverse_move_to_sl_times_leverage": 2.4,
+        "formula": "0.3423 * 7 = 2.396",
+        "meaning": "A 34.2% adverse move at 7x is about 2.4 times initial margin (notional/leverage). On isolated margin a position is often liquidated before a stop that far away. Cosmas margin mode is unknown. Do not assume the posted SL fills.",
+        "desk_margin_mode": "auto_trade.py sets CROSS before entry. That is the desk, not a Cosmas instruction."
+      }
+    },
+    "leverage_band": {
+      "observed_posted": {
+        "live_pippin": 7,
+        "fixtures_kaito_and_pons": 10
+      },
+      "band_to_quote_if_mimicking_his_text": "7x on a washed-out base copy of the live template. 10x appears only on undated fixtures. Do not average them into 8.5x.",
+      "confidence": "medium",
+      "size": "unknown",
+      "size_note": "Group leverage is the number he typed. It is not contracts, not margin, and not percent of equity. His personal size is an open gap."
+    },
+    "fx_glitch_desk_versus_cosmas": {
+      "do_not_confuse": "The desk's execution path is not his strategy. Recommending in the Cosmas style means quoting his levels and his 7x-10x text. It does not mean using daredevil leverage.",
+      "auto_trade": {
+        "file": "fxglitch/agent/auto_trade.py",
+        "behavior": [
+          "Maybe sends a parsed Telegram signal to Bitunix slots. Default env FXGLITCH_AUTO_TRADE is on unless set to 0/false/no. Disabled when VERCEL is set.",
+          "Slots from FXGLITCH_AUTO_SLOTS default '2'. Allowed slot ids 1, 2, 3.",
+          "One fill record per telegram_id. Messages older than 4 hours are skipped when posted_at parses.",
+          "Requires a stop and a take-profit after live_entry_check. Stop-adjustment with no stop is skipped. A stop-adjustment that still has a parsed stop is not explicitly blocked in maybe_execute; the parser warning exists but auto_trade does not check can_open. A recommending agent must still not treat 'adjust your sl' as a new entry.",
+          "Stake: FXGLITCH_AUTO_RISK default 5. That figure is collateral (margin), not distance-to-stop risk. qty ≈ margin * leverage / entry.",
+          "Leverage: passes the signal through plans.TIERS daredevil: leverage_mult 2, floor 15, cap 25. A 7x Cosmas post becomes 15x before the instrument cap, unless FXGLITCH_AUTO_LEV forces another integer.",
+          "Margin mode CROSS. Client id prefix fxg-auto-.",
+          "live_entry_check (plans.py): mark must sit strictly between SL and TP, live reward/risk at least 1, and mark must not already have covered ~80% of the original entry-to-TP span."
+        ],
+        "recommend_tiers_not_used_by_auto": {
+          "file": "fxglitch/agent/plans.py",
+          "note": "recommend() builds four tiers. Auto-trade forces daredevil only. Tiers change size and leverage, not the signal stop. Win/loss fields are this setup's R, not a historical win rate.",
+          "tiers": [
+            {
+              "id": "daredevil",
+              "risk_pct_of_equity": 8.0,
+              "leverage": "2x signal, floor 15, cap 25"
+            },
+            {
+              "id": "high",
+              "risk_pct_of_equity": 3.0,
+              "leverage": "1x signal + 2, floor 8, cap 15",
+              "blurb": "Near the group's leverage. Size is still aggressive."
+            },
+            {
+              "id": "mid",
+              "risk_pct_of_equity": 1.0,
+              "leverage": "0.5x signal + 4, floor 3, cap 5"
+            },
+            {
+              "id": "low",
+              "risk_pct_of_equity": 0.5,
+              "leverage": "0.3x signal + 2, floor 2, cap 3"
+            }
+          ]
+        }
+      },
+      "what_a_recommending_agent_should_do": "Quote the signal leverage (7 or 10) as his text. If a desk size is required, say the desk default stake is $5 margin and that this is a product choice, not his. Do not silently replace 7x with 15x in a 'Cosmas' card."
+    }
+  },
+  "take_profit": {
+    "shape": "Single TP, one bare number. No partials in the live text.",
+    "confidence_single_tp": "high_for_the_live_post",
+    "runner_not_r_multiple": {
+      "plain": "The live TP is a round number under a prior cycle high, not 2R or 3R.",
+      "pippin": {
+        "tp": 0.8,
+        "vs_mark": "0.8 / 0.01976573 = 40.47 times the mark. Percent gain if filled: (0.8 / 0.01976573 - 1) = +3947%.",
+        "true_r_multiple": 115.3,
+        "true_r_formula": "(0.8 - 0.01976573) / (0.01976573 - 0.013) = 0.78023427 / 0.00676573 = 115.3R",
+        "do_not_copy_the_39r_slip": "The playbook's '~39R' equates the ~39x percent-gain multiple with R and forgets to divide by the 34% stop. Use 115R for this setup's reward/risk. Either way it is a runner, not a measured 2R target, and it has not paid.",
+        "vs_history": {
+          "feb_2026_high": {
+            "date": "2026-02-26",
+            "high": 0.90759,
+            "tp_is_pct_of_that_high": 88.1
+          },
+          "dec_2025_high": {
+            "date": "2025-12-24",
+            "high": 0.75,
+            "note": "0.8 sits just above the Dec 2025 high and below the Feb 2026 high, one significant figure under 0.90759."
+          },
+          "source": "Bitunix PIPPINUSDT daily klines fetched 2026-10-01"
+        }
+      },
+      "kaito_fixture": {
+        "tp": 1.5,
+        "bitunix_2026_daily_high": {
+          "date": "2026-07-29",
+          "high": 1.3706,
+          "note": "1.5 did not print in 2026 on Bitunix daily data through 2026-09-30."
+        },
+        "oct_2025_high": {
+          "date": "2025-10-01",
+          "high": 1.5036,
+          "note": "1.5 matches this print rounded, not a 2R calculation."
+        },
+        "higher_nearby_high": {
+          "date": "2025-09-29",
+          "high": 1.6665,
+          "note": "So 1.5 is not 'the' all-time high. It is close to the 2025-10-01 high specifically."
+        }
+      },
+      "pons_fixture": {
+        "tp": 1.5,
+        "high_since_bitunix_listing": 0.9788,
+        "note": "1.5 had no prior high on this venue. On a new listing the fixture target can be a round number above the spike, not a measured move. Confidence low. 1.5 never traded on Bitunix daily data through 2026-09-30."
+      }
+    },
+    "mimic_rule_for_screen_a_only": "TP = the 180-365 day high, rounded down to one significant figure, and at least 5x the mark. Call it a runner. Do not call it a likely full exit. PIPPIN's 0.8 was still untouched after the 2026-10-01 00:00 UTC hourly bar, with price near 0.019.",
+    "do_not_invent_tp_for_new_listings": true
+  },
+  "trade_management": {
+    "hold_through_retracement": {
+      "confidence": "high_for_management_language",
+      "evidence": "Message -1002004401199:21568 at 2026-09-06 18:19 Africa/Lagos. Text: retracement is part of the market; names Pons, Kaito, Marscoin, Pippin; says Holding; says check out your profit on kaito.",
+      "no_time_stop": "No time stop appears in any sourced text.",
+      "kaito_profit_line": "Admin claim only. Not a fill. KAITO Bitunix September 2026 daily range was 0.2786-0.3759. Fixture TP 1.5 was not in that range. Treat as unverified mark-to-market talk."
+    },
+    "move_sl_on_winners": {
+      "confidence": "high_that_a_stop_lift_message_is_management_not_a_new_trade",
+      "evidence": "Undated fixture: 'Adjust your sl to $1 on pieverse' plus Tp 0.3 and Sl 0.93. Parser sets stop_adjustment and can_open false.",
+      "pieverse_level": "Bitunix PIEVERSEUSDT September 2026 daily low is 1.0075 on 2026-09-06, high 2.0321. $1 is 0.74% under that low, i.e. on the month's floor, not a fresh measured stop. The fixture's Tp 0.3 and Sl 0.93 are both below the September range, so they must not be opened as a new long. Original entry time is unknown. The fixture itself is undated, so do not assert he sent the lift on 2026-09-06."
+    },
+    "trail_note": {
+      "product_file": "tools/trail_200.py",
+      "this_is_not_a_cosmas_close": "A 200% (or 100%) ROI trail is FX-GLITCH position management. Cosmas never wrote a 200% close or a trail. Do not score a trail ratchet as his take-profit. Do not close a 'Cosmas style' recommendation at +200% ROI unless a real Cosmas message says so. None does.",
+      "what_the_code_does": "ROI = (mark-entry)/entry * leverage * 100 for a long. STEP defaults to env FXGLITCH_TRAIL_STEP or 100. When ROI crosses another STEP, the stop is ratcheted and never moved against the position. First step (ROI >= 100 with the default) locks breakeven. Next step locks the prior STEP percent of ROI. The module docstring instead says breakeven at 200% and lock 200% at 400%. Filename says 200. Trust the code default (100) unless the deployed env sets FXGLITCH_TRAIL_STEP. Either number is the desk's trail, not his exit.",
+      "alerts": "The tool can POST a WhatsApp alert via the local desk. That path is operational and out of scope for a recommendation card."
+    },
+    "ignore": [
+      "Educational contents (message :21569)",
+      "Naira or cash exchange promos (message :21570)",
+      "Bitunix affiliate footer with no levels",
+      "Paste duplicates and demo BTCUSDT longs"
+    ]
+  },
+  "btc_eth_regime": {
+    "source": "Bitunix USDT-M daily klines, interval=1d, fapi.bitunix.com, fetched 2026-10-01 about 02:35 Africa/Lagos. Last completed daily bar 2026-09-30. Marks are the same host's ticker endpoint at that fetch, so they are an unclosed 2026-10-01 print, not a daily close.",
+    "binance": "api.binance.com klines returned HTTP 451 from this host. Not used.",
+    "completed_daily_closes": {
+      "BTCUSDT": {
+        "2026-08-01": 62792.2,
+        "2026-08-19": 69310.1,
+        "2026-08-20": 72998.8,
+        "2026-08-21": 78309.1,
+        "2026-09-03": 81230.6,
+        "2026-09-05": 79797.7,
+        "2026-09-06_ohlc": {
+          "open": 79797.7,
+          "high": 80524.6,
+          "low": 79183.0,
+          "close": 80301.0
+        },
+        "2026-09-15_low_day": {
+          "low": 74909.5,
+          "close": 75600.0
+        },
+        "2026-09-21": {
+          "high": 87378.8,
+          "close": 86578.8
+        },
+        "2026-09-30": {
+          "high": 85622.8,
+          "low": 82903.0,
+          "close": 83576.8
+        },
+        "window_2026_03_16_to_2026_09_30_extreme": {
+          "high": 87378.8,
+          "high_date": "2026-09-21",
+          "low": 57773.0,
+          "low_date": "2026-07-01"
+        }
+      },
+      "ETHUSDT": {
+        "2026-08-01": 1844.16,
+        "2026-08-19": 2252.17,
+        "2026-08-20": 2326.18,
+        "2026-08-21": 2515.97,
+        "2026-09-05": 2479.28,
+        "2026-09-06_ohlc": {
+          "open": 2479.28,
+          "high": 2525.64,
+          "low": 2459.23,
+          "close": 2513.46
+        },
+        "2026-09-21": {
+          "high": 2806.58,
+          "close": 2774.5
+        },
+        "2026-09-30": {
+          "high": 2737.89,
+          "low": 2656.24,
+          "close": 2684.68
+        },
+        "window_extreme": {
+          "high": 2806.58,
+          "high_date": "2026-09-21",
+          "low": 1503.99,
+          "low_date": "2026-06-06"
+        }
+      }
+    },
+    "marks_2026_10_01_unclosed": {
+      "fetched_at_lagos": "2026-10-01T02:35:00+01:00",
+      "BTCUSDT_mark": 83473.9,
+      "ETHUSDT_mark": 2688.0,
+      "note": "Chosun Biz, 2026-10-01, quoted CoinMarketCap BTC $83,531.99 and ETH $2,683.14 as of 08:57 that morning (timezone of the clock not stated in the fetch). Same neighborhood as the Bitunix mark. Not an independent OHLC."
+    },
+    "returns_pct": {
+      "comment": "The PIPPIN post is 2026-09-06 00:23 UTC, about 23 minutes after the Bitunix daily open. Sep 6's close was not known yet. Use through-Sep-5 figures as entry context. Sep 6 close and later figures are ex-post.",
+      "entry_context_completed_bars": {
+        "BTC_Aug1_close_to_Sep5_close": 27.08,
+        "ETH_Aug1_close_to_Sep5_close": 34.44,
+        "BTC_Aug20_close_to_Sep5_close": 9.31,
+        "ETH_Aug20_close_to_Sep5_close": 6.58,
+        "BTC_Sep5_day": 0.23,
+        "note_sep5_day": "(79797.7 / 79616.2 - 1). Sep 4 close 79616.2."
+      },
+      "ex_post_after_the_post": {
+        "BTC_Sep5_close_to_Sep6_close": 0.63,
+        "ETH_Sep5_close_to_Sep6_close": 1.38,
+        "BTC_Sep6_close_to_Sep30_close": 4.08,
+        "ETH_Sep6_close_to_Sep30_close": 6.81,
+        "BTC_Sep6_close_to_Oct1_mark": 3.95,
+        "ETH_Sep6_close_to_Oct1_mark": 6.94
+      }
+    },
+    "alts_versus_majors": {
+      "method": "Bitunix futures daily closes, same fetch. Not a total-market-cap index.",
+      "Aug20_close_to_Sep5_close_pct": {
+        "BTC": 9.31,
+        "ETH": 6.58,
+        "PIPPIN": 2.24,
+        "KAITO": -11.9,
+        "PIEVERSE_approx": "Sep5 close 1.0352 vs Aug20 close 0.9607 = +7.75%. In line with ETH, slightly behind BTC.",
+        "PONS": "not listed yet on 2026-08-20",
+        "MARSCOIN": "not listed yet on 2026-08-20"
+      },
+      "Sep6_close_to_Sep30_close_pct": {
+        "BTC": 4.08,
+        "ETH": 6.81,
+        "PIPPIN": -4.54,
+        "KAITO": 11.71,
+        "PONS": -37.25,
+        "MARSCOIN": -30.17,
+        "PIEVERSE": 37.59
+      },
+      "reading": "Into the only dated entry, BTC had already rallied hard from the 2026-07-01 low and from 2026-08-01. ETH had rallied harder than BTC from Aug 1 to Sep 5. The alt he actually bought (PIPPIN) had lagged that rally and was not leading. The hold-list listings (PONS, MARSCOIN) were four-day-old Bitunix contracts that had already spiked and, on Sep 6's completed daily bar, closed red while BTC closed green. That is a mixed bag of a lagging washed-out name plus fresh listings, not an alt-season basket that was leading BTC.",
+      "secondary_breadth_not_a_price_fact": "Several 2026-09-06 web briefs quote BTC near $79,900-$80,000 and ETH near $2,500, which matches these Bitunix closes, and they quote BTC dominance near 59% with total market cap down on the day while large caps were green. A different brief the same day claims altseason rotation. Dominance and total-cap were not fetched from an exchange here. Do not pick a side. Do not use those briefs as a gate."
+    },
+    "how_to_filter_alt_longs_versus_btc": {
+      "not_a_btc_trend_system": "Do not require a Donchian breakout, a macro print, or 'alts leading BTC' before a Cosmas-style card. docs/INTELLIGENCE.md measured macro conditions and found they did not generalize. That layer sizes a different strategy. It does not describe Cosmas.",
+      "what_the_one_entry_shows": "He posted a lagging alt long while the completed BTC and ETH trend into 2026-09-05 was up, not during a BTC crash. One observation. It does not prove he waits for BTC to be green, and it does not prove he fades BTC.",
+      "agent_rule": [
+        "Attach context tags only: btc_return_14d_completed, eth_return_14d_completed, btc_prior_day, eth_prior_day, alt_return_14d, alt_minus_btc_14d. Use completed daily bars. Never use the still-open daily close as if he knew it.",
+        "If the alt is leading BTC by a large margin already, it fails the washed-out PIPPIN shape (he bought the base, not a name that had already run with the leaders). That is a shape filter, not a BTC filter.",
+        "Do not block a washed-out long only because it is lagging BTC. Lagging is what PIPPIN was doing.",
+        "Do not upgrade confidence because BTC is in an uptrend. The sample is n=1 and the trade has not hit TP or SL.",
+        "There is no sampled entry on a BTC down day. Do not invent a veto and do not invent permission.",
+        "New listings: record BTC context the same way, but do not attach his TP/SL. PONS and MARSCOIN were already extended versus listing lows by Sep 6 and were not 'BTC beta confirms the long'."
+      ],
+      "confidence": "low"
+    }
+  },
+  "news_and_ecosystem": {
+    "rule": "If a signal cannot be tied to a headline that existed before the post, the catalyst is unknown. Timing after the post cannot be the reason for the post. Secondary writeups are labeled secondary.",
+    "items": [
+      {
+        "topic": "PIPPIN entry catalyst",
+        "linkage": "unknown",
+        "detail": "No headline fetched that is dated on or before 2026-09-06 00:23 UTC and tied to this CMP long. Do not invent a narrative for 'Night research'."
+      },
+      {
+        "topic": "PIPPIN Phemex spot delist",
+        "linkage": "not_an_entry_catalyst",
+        "source": "https://phemex.com/announcements/phemex-will-delist-the-perp-usdt-spot-pair-100669 fetched 2026-10-01",
+        "facts": "Phemex dated the notice 2026-09-10 02:35:01. PIPPIN/USDT spot delist at 10:00 UTC on 2026-09-11. Deposits and withdrawals stop then. This is 4 days after the Cosmas entry. It is a delist, not a listed bullish catalyst. No evidence he traded it. Bitunix PIPPIN daily on 2026-09-11: high 0.01844 low 0.01711 close 0.01796, still above SL 0.013 and far below TP 0.8."
+      },
+      {
+        "topic": "PIPPIN late-August airdrop chatter",
+        "linkage": "unknown",
+        "source": "CoinMarketCap CMC-AI pippin latest-updates page, search snippet only, not treated as a wire",
+        "detail": "The page summarizes social posts about a Solana airdrop in late August 2026. That is not a primary announcement and is not tied to the 01:23 Lagos entry. Leave unknown."
+      },
+      {
+        "topic": "KAITO",
+        "linkage": "unknown",
+        "detail": "Search snippet: NexDAX LinkedIn post dated 2026-09-04 saying KAITO/USDT trading opens 2026-09-04 07:00 UTC. Page not fetched as primary HTML. Even if real, it is a small-venue listing two days before a hold-post profit claim, and Bitunix price that month never approached fixture TP 1.5. Do not connect it to 'profit on kaito'. No other KAITO catalyst was verified for early September 2026.",
+        "price_context_primary": "Bitunix KAITOUSDT 2026 daily high 1.3706 on 2026-07-29. 2025-10-01 high 1.5036. 2025-09-29 high 1.6665. September 2026 range 0.2786-0.3759."
+      },
+      {
+        "topic": "PONS listings",
+        "linkage": "timeline_overlap_only_not_a_proven_signal_link",
+        "sources": [
+          "Bitunix PONSUSDT first daily bar 2026-09-02 (kline fetch). Day range high 0.5042 low 0.3566 close 0.4581. September high 0.9788 on 2026-09-05.",
+          "Bybit announcement fetched 2026-10-01: PONSUSDT perpetual, page dated Aug 31, 2026, max leverage 20, tick 0.0001, funding every 4 hours, cap 2.5%. URL https://announcements.bybit.com/en/article/new-listing-ponsusdt-perpetual-contract-with-up-to-20x-leverage--artb259856df72c/"
+        ],
+        "later_than_the_hold_post": [
+          "SunCrypto blog dated September 10, 2026 naming MARSCOIN, FLOCK, and PONS futures. After the Sep 6 hold post. Not an entry cause.",
+          "Pintu blog dated 2026-09-24 listing Marscoin (MARS) and Pons (PONS) for Indonesian spot. After the hold post. Pintu describes Pons as a non-custodial launchpad token on Robinhood Chain. That description is Pintu's, not a Cosmas post."
+        ],
+        "fixture": "Undated. TP 1.5 never traded. SL 0.44 traded through (September low 0.3566). Cannot be scored as his winner."
+      },
+      {
+        "topic": "MARSCOIN",
+        "linkage": "unknown_for_any_cosmas_fill",
+        "primary": "Bitunix MARSCOINUSDT first daily bar 2026-09-02. Open 0.0717 high 0.07529 low 0.05217 close 0.06335. September high 0.26772 on 2026-09-05. September low 0.05217. No SL or TP in any Cosmas text. Named only in the hold post.",
+        "secondary_not_confirmed": "Traders Union wrote on 2026-09-02 that Bybit listed MARSCOINUSDT perps up to 20x; it says the source tweet was deleted. Not re-verified on Bybit. Ground News aggregated a claim that Binance spot-listed MARSCOIN on 2026-09-04. A follow-up search did not return an official binance.com announcement. Do not state a Binance spot listing as fact.",
+        "do_not_merge_with_old_mars": "Older 'MARS' governance-token posts are a different asset. Do not use them."
+      },
+      {
+        "topic": "PIEVERSE",
+        "linkage": "unknown",
+        "detail": "No early-September 2026 headline was fetched that matches the undated SL-adjust fixture. A KuCoin listing page exists in search results but its date was not established in this pass. Do not invent a catalyst. Price fact only: Bitunix September 2026 range 1.0075-2.0321, and by 2026-09-30 close 1.4364 the contract was up about 37.6% from the Sep 6 close without any sourced Cosmas entry."
+      },
+      {
+        "topic": "2026-10-01 macro color",
+        "linkage": "not_a_cosmas_input",
+        "source": "Chosun Biz English, 2026-10-01, https://biz.chosun.com/en/en-finance/2026/10/01/QBW6DV7KJBHYRMXL65F7U4ZP4Q/ (search snippet; article not fully re-read beyond the snippet)",
+        "detail": "Snippet says August US PCE was 3.4% year over year versus a 3.7% forecast, and that the 10-year yield around 5.3% gave back a BTC pop. BEA primary release was not fetched. Do not treat this as why any Cosmas level exists."
+      }
+    ]
+  },
+  "scan_and_recommend": {
+    "purpose": "Another agent can run this to draft a card. It cannot discover a proven Cosmas edge. There is one dated entry and it has not hit TP or SL.",
+    "label_required_on_every_idea": "hypothesis, not a Cosmas signal",
+    "do_not_auto_trade": true,
+    "do_not_place_orders": true,
+    "steps": [
+      {
+        "step": 1,
+        "action": "Parse only real text with the signal_copy rules. Drop education, Naira/cash promos, affiliate footers, duplicate pastes, and demo BTC.",
+        "confidence": "high"
+      },
+      {
+        "step": 2,
+        "action": "If the text is a dated Cosmas entry with CMP, one side, one SL, one TP, and leverage, recommend THAT trade only as a copy of his levels. Re-check the live Bitunix mark. If mark is beyond SL or TP, say the level is already traded through and do not refresh the entry. If the message is older than the event it describes, say so.",
+        "confidence": "high_for_parsing_medium_for_copying"
+      },
+      {
+        "step": 3,
+        "action": "If the text says adjust SL, output a management note (new stop, symbol) and stop. Do not open a position from Tp/Sl numbers sitting in that same message.",
+        "confidence": "high"
+      },
+      {
+        "step": 4,
+        "action": "If the text says targeting long but has no CMP and no numeric entry, do not invent an entry. PONS is the example. can_open is false.",
+        "confidence": "high"
+      },
+      {
+        "step": 5,
+        "name": "screen_a_washed_out_alt",
+        "action": "Only if the user asked for Cosmas-like ideas, not copies. Universe: Bitunix USDT-M, skip BTCUSDT and ETHUSDT. All must be true: mark at least 80% below the 180-day high (PIPPIN was about 97.8% below 0.90759); mark within 25% of the 90-day low; 24h quote volume enough for a small futures order, else skip the book; proposed SL = lowest daily low of about 120 days, then about 6% above that low, and that SL must be 20-45% under the mark; proposed TP = 180-365 day high rounded down to one significant figure and at least 5x the mark. Quote leverage text 7x. State desk sizing separately if needed. Attach BTC/ETH context tags from btc_eth_regime.how_to_filter_alt_longs_versus_btc. Label low confidence hypothesis.",
+        "confidence": "low",
+        "justification": "not_justified_as_a_cosmas_trade"
+      },
+      {
+        "step": 6,
+        "name": "screen_b_new_listing",
+        "action": "Bitunix perpetual whose first daily bar is 14 days old or newer, still above the listing-day low, and not already more than 8x that low (MARSCOIN September high was about 5.1x the 0.05217 low). Name the coin as 'Cosmas-like new listing' only.",
+        "explicit_do_not": "Do NOT invent TP or SL for a new listing. Do NOT say buy. The only listing levels we have are an undated PONS fixture whose TP never traded and whose SL did. Until a dated listing signal exists, Screen B has no prices.",
+        "confidence": "low"
+      },
+      {
+        "step": 7,
+        "action": "Write the card with: symbol, side, entry type, SL, TP, leverage text, R of this setup if both levels exist, BTC/ETH completed-bar context, catalyst = unknown unless a sourced headline predates the signal, outcome status, and the sentence 'Not a proven winner. Proven TP-before-SL count is 0.'",
+        "confidence": "high_for_the_disclaimer"
+      }
+    ],
+    "skip": [
+      "shorts, unless a real future Cosmas short arrives, in which case parse it instead of forcing long",
+      "stop-adjustment lines as entries",
+      "targeting-long without CMP",
+      "moonshot TP described as a high-probability full exit",
+      "BTC or ETH demo signals",
+      "anything whose only source is education, a cash promo, or an affiliate footer"
+    ],
+    "confidence_table": {
+      "parse_template_and_drop_non_trades": "high",
+      "tp_is_round_prior_high_and_sl_is_near_base_low": "medium",
+      "longs_7x_to_10x_hold_through_dips": "medium_tiny_sample",
+      "screen_a_or_b_output_is_a_cosmas_trade": "not_justified",
+      "claim_a_win_rate": "blocked"
+    }
+  },
+  "worked_examples": [
+    {
+      "id": "-1002004401199:21566",
+      "status": "real_dated_entry",
+      "posted_at_utc": "2026-09-06T00:23:19Z",
+      "posted_at_lagos": "2026-09-06T01:23:19+01:00",
+      "text": "Pippin/usdt, Long, Entry CMP, Tp 0.8, Sl 0.01300, Leverage 7x, Night research let's go",
+      "symbol": "PIPPINUSDT",
+      "side": "LONG",
+      "entry": "CMP",
+      "entry_mark": 0.01976573,
+      "stop": 0.013,
+      "take_profit": 0.8,
+      "leverage_text": 7,
+      "stop_pct_under_mark": 34.23,
+      "reward_risk_r": 115.3,
+      "price_multiple_to_tp": 40.47,
+      "structure": {
+        "sl_vs_2026_06_06_low_0_01227": "5.95% above",
+        "tp_vs_2026_02_26_high_0_90759": "88.1% of that high",
+        "dec_2025_high": 0.75,
+        "drawdown_from_feb_high_at_mark": "97.82% below 0.90759"
+      },
+      "outcome_hourly_bitunix_through_2026_10_01_00_00_utc": {
+        "bars": 600,
+        "high": 0.02028,
+        "low": 0.01626,
+        "last_close": 0.01886,
+        "tp_touched": false,
+        "sl_touched": false,
+        "mfe_vs_mark_pct": 2.6,
+        "mae_vs_mark_pct": -17.7,
+        "verdict": "Open / failed to pay. Not a successful trade."
+      },
+      "daily_cross_check_this_fetch": {
+        "sep6_ohlc": {
+          "open": 0.02012,
+          "high": 0.02039,
+          "low": 0.01935,
+          "close": 0.01982
+        },
+        "sep15_low": 0.01626,
+        "sep30_close": 0.01892,
+        "oct1_mark": 0.01888,
+        "sep6_to_sep30_close_pct": -4.54
+      },
+      "btc_context_at_entry": "Completed BTC rally into Sep 5 close 79797.7, about +27% from Aug 1 close. PIPPIN had lagged. Sep 6 BTC close was not known at 00:23 UTC.",
+      "catalyst": "unknown",
+      "successful_tp_before_sl": false
+    },
+    {
+      "id": "-1002004401199:21568",
+      "status": "real_hold_update",
+      "posted_at_lagos": "2026-09-06T18:19:09+01:00",
+      "basket": [
+        "PONSUSDT",
+        "KAITOUSDT",
+        "MARSCOINUSDT",
+        "PIPPINUSDT"
+      ],
+      "text": "Retracement is part of the market. Pons, Kaito, Marscoin, Pippin. Holding. Check out your profit on kaito.",
+      "successful_tp_before_sl": false,
+      "note": "Not an entry. Kaito profit line is an admin claim. September KAITO range 0.2786-0.3759 did not include 1.5."
+    },
+    {
+      "id": "-1002004401199:21569",
+      "status": "noise",
+      "posted_at_utc": "2026-09-06T17:40:21Z",
+      "text": "Educational contents"
+    },
+    {
+      "id": "-1002004401199:21570",
+      "status": "noise",
+      "posted_at_utc": "2026-09-06T17:44:21Z",
+      "text": "Naira exchange promo. Not a trade."
+    },
+    {
+      "id": "fixture:kaito",
+      "status": "undated_parser_fixture",
+      "source": "tests/test_signal_copy.py",
+      "text": "Kaito/usdt\nLong position\nEntry CMP\nTp 1.5\nSl 0.2500\nLeverage 10x",
+      "symbol": "KAITOUSDT",
+      "side": "LONG",
+      "entry": "CMP",
+      "stop": 0.25,
+      "take_profit": 1.5,
+      "leverage_text": 10,
+      "parser_can_open": true,
+      "price": "2026 high 1.3706 (2026-07-29) so TP 1.5 did not print in 2026. Oct 1 2025 high 1.5036. Sep 29 2025 high 1.6665. Sep 2026 range 0.2786-0.3759 so SL 0.25 was not hit that month. Sep 6 close 0.3134. Sep 30 close 0.3501. Oct 1 mark 0.3516.",
+      "successful_tp_before_sl": null,
+      "why_unscored": "No post timestamp, so first-touch cannot be assigned."
+    },
+    {
+      "id": "fixture:pons",
+      "status": "undated_parser_fixture",
+      "source": "tests/test_signal_copy.py",
+      "text": "Pons /usdt has a whale's\nAm targeting long\nTp 1.5\nSl 0.4400\nLeverage 10x",
+      "symbol": "PONSUSDT",
+      "side": "LONG",
+      "entry": null,
+      "stop": 0.44,
+      "take_profit": 1.5,
+      "leverage_text": 10,
+      "parser_can_open": false,
+      "warning": "entry is missing or not explicitly CMP",
+      "price": "First Bitunix daily bar 2026-09-02 low 0.3566. September high 0.9788 on 2026-09-05. Sep 6 close 0.8502. Sep 30 close 0.5335. Oct 1 mark 0.5281. TP 1.5 never traded. SL 0.44 was traded through because the low is 0.3566.",
+      "successful_tp_before_sl": false,
+      "why": "Take-profit never printed. Not a win regardless of entry time. Do not invent a CMP."
+    },
+    {
+      "id": "fixture:pieverse-sl-adjust",
+      "status": "undated_stop_adjustment",
+      "source": "tests/test_signal_copy.py",
+      "text": "Adjust your sl to $1 on pieverse\nTp 0.3\nSl 0.93\nPieverse usdt",
+      "symbol": "PIEVERSEUSDT",
+      "stop_adjust_to": 1.0,
+      "also_in_text": {
+        "tp": 0.3,
+        "sl": 0.93
+      },
+      "parser_can_open": false,
+      "price": "September 2026 low 1.0075 on 2026-09-06, high 2.0321. Sep 30 close 1.4364. Oct 1 mark 1.4519. $1 sits on that month's floor. Tp 0.3 and Sl 0.93 are below the September range.",
+      "successful_tp_before_sl": null,
+      "why_unscored": "Not a new entry. Original entry unknown. Catalyst unknown."
+    },
+    {
+      "id": "named:marscoin",
+      "status": "named_in_hold_basket_only",
+      "symbol": "MARSCOINUSDT",
+      "price": "First daily bar 2026-09-02 low 0.05217. September high 0.26772 on 2026-09-05 (about 5.13x the listing low). Sep 6 close 0.19623 after a same-day high 0.25434. Sep 30 close 0.13702. Oct 1 mark 0.13592.",
+      "sl_tp": null,
+      "successful_tp_before_sl": null,
+      "catalyst": "Bitunix listing date is a kline fact. Exchange-listing headlines beyond that are secondary or unconfirmed. No Cosmas SL/TP to recommend."
+    }
+  ],
+  "open_gaps": [
+    "Win rate, average winner, and how often the far TP is actually paid. Proven TP-before-SL count is 0.",
+    "Any Cosmas message after 2026-09-06 18:44 Africa/Lagos, or before message :21566.",
+    "Whether the KAITO, PONS, and PIEVERSE fixtures were ever posted, and when.",
+    "Whether 'profit on kaito' was a closed TP, a partial, or unrealized PnL.",
+    "His personal size and margin mode. Posted 7x-10x is not size. Isolated margin may liquidate before the PIPPIN stop.",
+    "No sampled short, no sampled partial TP, no sampled time stop, no sampled BTC or ETH call.",
+    "Public Telegram preview cannot fill these gaps. Next useful artifact is a member export of the group to JSON or HTML. Do not collect API keys or session files.",
+    "2026-10-01 daily OHLC was not closed at build. Re-read Bitunix daily bars before updating outcomes.",
+    "BTC dominance and total-market breadth on 2026-09-06 were not independently fetched.",
+    "Official Binance spot listing of MARSCOIN was not confirmed. Do not cite it."
+  ]
+}
