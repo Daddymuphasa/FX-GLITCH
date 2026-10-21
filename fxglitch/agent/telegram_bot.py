@@ -52,6 +52,7 @@ def _offset() -> int:
 
 def _save_offset(value: int) -> None:
     try:
+        OFFSET.parent.mkdir(parents=True, exist_ok=True)
         OFFSET.write_text(json.dumps({"offset": value}), encoding="utf-8")
     except OSError:
         pass
@@ -129,30 +130,32 @@ class BotBridge:
                     time.sleep(5)
                     continue
                 watch = _load_watch().get("chat_id")
+                from .auto_trade import retry_pending
+                retry_pending()
                 for upd in data.get("result") or []:
-                    offset = int(upd.get("update_id", 0)) + 1
-                    _save_offset(offset)
                     msg = (upd.get("message") or upd.get("channel_post")
                            or upd.get("edited_message") or upd.get("edited_channel_post") or {})
                     chat = msg.get("chat") or {}
                     chat_id = chat.get("id")
-                    if watch and _valid_chat_id(watch) and not _same_chat(chat_id, watch):
-                        continue
-                    text = (msg.get("text") or msg.get("caption") or "").strip()
-                    if not text:
-                        continue
-                    title = chat.get("title") or chat.get("username") or str(chat_id)
-                    posted = None
-                    if msg.get("date"):
-                        posted = datetime.fromtimestamp(int(msg["date"]), tz=timezone.utc).strftime(
-                            "%Y-%m-%dT%H:%M:%SZ"
-                        )
-                    _ingest_text(
-                        text,
-                        telegram_id=f"{chat_id}:{msg.get('message_id')}",
-                        chat=title,
-                        posted_at=posted,
-                    )
+                    if not (watch and _valid_chat_id(watch) and not _same_chat(chat_id, watch)):
+                        text = (msg.get("text") or msg.get("caption") or "").strip()
+                        if text:
+                            title = chat.get("title") or chat.get("username") or str(chat_id)
+                            posted = None
+                            if msg.get("date"):
+                                posted = datetime.fromtimestamp(int(msg["date"]), tz=timezone.utc).strftime(
+                                    "%Y-%m-%dT%H:%M:%SZ"
+                                )
+                            _ingest_text(
+                                text,
+                                telegram_id=f"{chat_id}:{msg.get('message_id')}",
+                                chat=title,
+                                posted_at=posted,
+                            )
+                    # A failed handler must be replayed on the next poll. Saving
+                    # before processing permanently loses that Telegram update.
+                    offset = int(upd.get("update_id", 0)) + 1
+                    _save_offset(offset)
                 _write_status({
                     "status": "watching",
                     "watch": _load_watch(),

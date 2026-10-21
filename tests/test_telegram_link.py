@@ -4,7 +4,11 @@ import os
 import sys
 import tempfile
 import unittest
+import asyncio
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -49,6 +53,33 @@ class TestWatchConfig(unittest.TestCase):
             encoding="utf-8",
         )
         self.assertEqual(tg._load_watch(), {})
+
+    def test_historical_scan_only_checks_fresh_posts_live(self):
+        now = datetime.now(timezone.utc)
+        message = "BTCUSDT Long Entry CMP TP 120 SL 90"
+        posts = [SimpleNamespace(id=2, date=now - timedelta(minutes=5), raw_text=message),
+                 SimpleNamespace(id=1, date=now - timedelta(days=2), raw_text=message)]
+
+        class Client:
+            async def iter_messages(self, entity, limit):
+                for post in posts:
+                    yield post
+
+        bridge = tg.TelegramBridge()
+        bridge._client = Client()
+        rec = SimpleNamespace(mark=None, binance_symbol="BTCUSDT", entry=None,
+                              direction="LONG", stop=90, take_profits=[120])
+        with patch.object(tg, "_load_watch", return_value={"chat_id": "-1001"}), \
+             patch.object(tg, "recommend", return_value=rec), \
+             patch.object(tg, "fetch_mark", return_value=100) as mark, \
+             patch.object(tg, "ingest"), \
+             patch.object(bridge, "_write_status"), \
+             patch("fxglitch.agent.auto_trade.maybe_execute") as execute:
+            result = asyncio.run(bridge._scan_today())
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["scanned"], 2)
+        self.assertEqual(mark.call_count, 1)
+        self.assertEqual(execute.call_count, 1)
 
 
 if __name__ == "__main__":

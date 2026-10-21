@@ -37,6 +37,22 @@ class TestSignalParser(unittest.TestCase):
         self.assertFalse(signal.can_open)
         self.assertIn("direction is missing", signal.warnings)
 
+    def test_lsk_downtrend_without_short_word(self):
+        signal = parse_signal(
+            "Lsk/usdt has pumped before\nIf we don't touch sl of 0.82600\nDowntrend to 0.2 is inevitable."
+        )
+        self.assertEqual(signal.symbol, "LSKUSDT")
+        self.assertEqual(signal.direction, SignalDirection.SHORT)
+        self.assertEqual(signal.stop_loss, Decimal("0.82600"))
+        self.assertEqual(signal.take_profit, Decimal("0.2"))
+
+    def test_lsk_to_target_infers_short_from_sl_vs_tp(self):
+        signal = parse_signal("Lsk to 0.2\nSl 0.82399")
+        self.assertEqual(signal.symbol, "LSKUSDT")
+        self.assertEqual(signal.direction, SignalDirection.SHORT)
+        self.assertEqual(signal.take_profit, Decimal("0.2"))
+        self.assertEqual(signal.stop_loss, Decimal("0.82399"))
+
     def test_duplicate_message_is_ignored(self):
         dedupe = SignalDeduplicator()
         self.assertTrue(dedupe.first_time("telegram:123"))

@@ -114,7 +114,7 @@ h2 {
 .banner:empty { display: none; }
 .banner { margin: 10px 0 0; font-family: "IBM Plex Mono", monospace; font-size: 12px; }
 
-.feed, .trade, .admin-desk, .book {
+.live-board, .feed, .trade, .admin-desk, .book {
   border-radius: 20px;
   padding: 18px 16px 16px;
   margin-bottom: 14px;
@@ -160,6 +160,12 @@ h2 {
   gap: 8px;
   flex-wrap: wrap;
 }
+.live-pos {
+  cursor: default;
+}
+.live-pos .pnl.up { color: var(--allow); }
+.live-pos .pnl.down { color: var(--block); }
+.pill.on { background: rgba(61, 204, 122, 0.18); color: var(--allow); }
 .item .meta { color: var(--muted); font-size: 12px; margin-top: 6px; }
 .tag {
   display: inline-flex;
@@ -196,6 +202,12 @@ h2 {
   gap: 8px;
   margin: 12px 0 4px;
 }
+#live-balance.stats { grid-template-columns: 1fr 1fr; }
+@media (min-width: 520px) {
+  #live-balance.stats { grid-template-columns: 1fr 1fr 1fr 1fr; }
+}
+.pnl.up { color: var(--allow); }
+.pnl.down { color: var(--block); }
 .stat {
   background: rgba(255, 255, 255, 0.05);
   border-radius: 12px;

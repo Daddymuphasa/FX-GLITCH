@@ -251,6 +251,7 @@ class Backtest:
             equity += s.position.pnl
             trades.append(s.position)
             s.position = None
+            curve[-1] = equity
 
         return BacktestResult(
             strategy=s.name,
@@ -269,6 +270,8 @@ class Backtest:
 
         if order.sl is None:
             return None  # no stop, no trade - we do not size blind bets here
+        if order.sl <= 0 or (entry - order.sl) * order.direction <= 0:
+            return None
 
         stop_distance = abs(entry - order.sl)
         if stop_distance <= 0:
@@ -293,12 +296,12 @@ class Backtest:
         """Stop loss is checked first, on purpose. See rule 2 at the top."""
         if t.direction == LONG:
             if t.sl is not None and bar.low <= t.sl:
-                return t.sl, "stop loss"
+                return min(t.sl, bar.open), "stop loss"
             if t.tp is not None and bar.high >= t.tp:
                 return t.tp, "take profit"
         else:
             if t.sl is not None and bar.high >= t.sl:
-                return t.sl, "stop loss"
+                return max(t.sl, bar.open), "stop loss"
             if t.tp is not None and bar.low <= t.tp:
                 return t.tp, "take profit"
         return None

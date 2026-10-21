@@ -145,6 +145,31 @@ class TestMcp(unittest.TestCase):
 
 
 class TestCycleUsesInjectedBriefing(unittest.TestCase):
+    def test_signal_fetches_its_own_symbol_not_the_default_btc(self):
+        from unittest.mock import patch
+
+        briefing = fetch_briefing("ETHUSDT", transport=transport_for())
+        with patch("fxglitch.agent.session.fetch_briefing", return_value=briefing) as fetch:
+            run_cycle(message="ETHUSDT long CMP sl 100000 tp 130000")
+        fetch.assert_called_once_with("ETHUSDT")
+
+    def test_live_cycle_checks_current_holdings_even_when_balance_is_supplied(self):
+        from unittest.mock import patch
+        from fxglitch.agent.protection import AccountState
+
+        briefing = fetch_briefing("BTCUSDT", transport=transport_for())
+        class Venue:
+            authenticated = True
+            def balance(self): return paper_balance(1000)
+            def positions(self): return [Position("BTCUSDT", LONG, 0.01, 110000)]
+            def mark_price(self, symbol): return 110000
+
+        with patch("fxglitch.agent.protection.observe_account", return_value=AccountState()):
+            result = run_cycle(briefing=briefing, live=True, venue=Venue(), balance=paper_balance(),
+                               proposal=ProposedTrade("BTCUSDT", "open", "LONG", entry=110000, stop=100000))
+        self.assertFalse(result.sent)
+        self.assertIn("already holding", result.policy["reason"])
+
     def test_cycle_does_not_invent_an_entry(self):
         briefing = fetch_briefing("BTCUSDT", transport=transport_for())
         result = run_cycle("BTCUSDT", briefing=briefing, live=False)

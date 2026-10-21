@@ -78,6 +78,7 @@ Skill file for agents: [`skills/fx-glitch/SKILL.md`](skills/fx-glitch/SKILL.md)
 ## Run
 
 ```bash
+python --version  # use Python 3.12; WhatsApp linking depends on it
 python -m pip install -r requirements.txt
 python agent.py --demo
 python agent.py --symbol BTCUSDT

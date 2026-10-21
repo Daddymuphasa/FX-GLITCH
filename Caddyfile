@@ -1,3 +1,8 @@
+{
+	email hello@fxglitch.xyz
+}
+
 fxglitch.xyz, www.fxglitch.xyz {
+	encode gzip
 	reverse_proxy desk:8765
 }

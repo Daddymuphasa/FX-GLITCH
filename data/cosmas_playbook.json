@@ -1,0 +1,514 @@
+{
+  "updated_at": "2026-10-01T01:32:04Z",
+  "habits": {
+    "n_valid": 45,
+    "cmp_share": 0.7111111111111111,
+    "dir_mix": {
+      "SHORT": 21,
+      "LONG": 24
+    },
+    "lev_avg": 7.4,
+    "lev_mode_buckets": {
+      "8-15": 10,
+      "<=7": 30
+    },
+    "median_rr": 8.886734693877552,
+    "avg_rr": 34.453793915278744,
+    "median_stop_pct": 29.76516352110647,
+    "median_tp_pct": 106.1005770816158,
+    "p25_stop_pct": 9.66326925557992,
+    "p75_stop_pct": 50.77484047402005,
+    "scalp_share": 0.2222222222222222,
+    "full_tp": 1,
+    "full_sl": 9,
+    "full_win_rate": 0.1,
+    "oneR_hits": 14,
+    "oneR_sl": 7,
+    "oneR_edge": 0.6666666666666666,
+    "oneR_avg_rr_on_winners": 27.432120930113694,
+    "symbols_most_posted": [
+      [
+        "SKRUSDT",
+        5
+      ],
+      [
+        "PIPPINUSDT",
+        4
+      ],
+      [
+        "TRUTHUSDT",
+        3
+      ],
+      [
+        "QNTUSDT",
+        2
+      ],
+      [
+        "TUTUSDT",
+        2
+      ],
+      [
+        "INJUSDT",
+        2
+      ],
+      [
+        "WIFUSDT",
+        2
+      ],
+      [
+        "USUSDT",
+        2
+      ],
+      [
+        "PUMPUSDT",
+        2
+      ],
+      [
+        "ACTUSDT",
+        2
+      ],
+      [
+        "MARSCOINUSDT",
+        1
+      ],
+      [
+        "RAYUSDT",
+        1
+      ]
+    ]
+  },
+  "playbook": {
+    "version": 1,
+    "source": "Cosmas TG -1002004401199",
+    "method": "Telethon history + Bitunix 1h first-touch scoring; valid SL/TP geometry only",
+    "voice": {
+      "entry": "Mostly CMP / market (~71% of valid posts)",
+      "leverage": "Usually 7x, sometimes 10x (avg ~7.4); desk daredevil may floor to 15x",
+      "stop": "Invalidation often wide on alts (median tens of %); not tight microstructure stops",
+      "tp": "Asymmetric stretch targets \u2014 median RR high (moonshot/runner). Scalping tag still often has far TP",
+      "direction": "Near-balanced LONG/SHORT in valid sample",
+      "tags": [
+        "Scalping",
+        "Night research",
+        "Becareful of volatility"
+      ]
+    },
+    "edge_notes": {
+      "full_tp_vs_sl": 0.1,
+      "plus1R_before_minus1R": 0.6666666666666666,
+      "interpretation": "Cosmas posts lottery-style TP distances; structural +1R before -1R is the realistic skill metric until longer history accumulates TP hits."
+    },
+    "suggest_rules_v1": [
+      "Entry: CMP",
+      "Leverage: 7x-10x signal style (execution may use desk daredevil 15x)",
+      "Geometry must be valid",
+      "Stop: structural invalidation beyond recent swing (Cosmas-like width), not 0.2% scalp noise",
+      "TP: primary runner target multi-R (aim median Cosmas RR band) + optional scale/BE plan at +1R",
+      "Prefer symbols Cosmas actually trades / liquid USDT perps",
+      "Reject live chase if mark R:R collapses below 1.0 for suggestions (0.5 only for auto-follow)",
+      "Label scalping only when both stop% and tp% are relatively contained vs median"
+    ],
+    "habits": {
+      "n_valid": 45,
+      "cmp_share": 0.7111111111111111,
+      "dir_mix": {
+        "SHORT": 21,
+        "LONG": 24
+      },
+      "lev_avg": 7.4,
+      "lev_mode_buckets": {
+        "8-15": 10,
+        "<=7": 30
+      },
+      "median_rr": 8.886734693877552,
+      "avg_rr": 34.453793915278744,
+      "median_stop_pct": 29.76516352110647,
+      "median_tp_pct": 106.1005770816158,
+      "p25_stop_pct": 9.66326925557992,
+      "p75_stop_pct": 50.77484047402005,
+      "scalp_share": 0.2222222222222222,
+      "full_tp": 1,
+      "full_sl": 9,
+      "full_win_rate": 0.1,
+      "oneR_hits": 14,
+      "oneR_sl": 7,
+      "oneR_edge": 0.6666666666666666,
+      "oneR_avg_rr_on_winners": 27.432120930113694,
+      "symbols_most_posted": [
+        [
+          "SKRUSDT",
+          5
+        ],
+        [
+          "PIPPINUSDT",
+          4
+        ],
+        [
+          "TRUTHUSDT",
+          3
+        ],
+        [
+          "QNTUSDT",
+          2
+        ],
+        [
+          "TUTUSDT",
+          2
+        ],
+        [
+          "INJUSDT",
+          2
+        ],
+        [
+          "WIFUSDT",
+          2
+        ],
+        [
+          "USUSDT",
+          2
+        ],
+        [
+          "PUMPUSDT",
+          2
+        ],
+        [
+          "ACTUSDT",
+          2
+        ],
+        [
+          "MARSCOINUSDT",
+          1
+        ],
+        [
+          "RAYUSDT",
+          1
+        ]
+      ]
+    }
+  },
+  "oneR_samples": [
+    {
+      "id": "-1002004401199:21842",
+      "date": "2026-09-30T18:07:49Z",
+      "symbol": "QNTUSDT",
+      "direction": "SHORT",
+      "entry": 298.35,
+      "stop": 311.0,
+      "tps": [
+        270.0
+      ],
+      "leverage": 10.0,
+      "cmp": true,
+      "raw": "Qnt /usdt\nShort position \nEntry CMP \nTp 270\nSl 311\nLeverage 10x \n\ud83d\udc49\ud83d\udc49Scalping \nBecareful of volatility",
+      "rr": 2.2411067193675946,
+      "stop_pct": 4.239986592927761,
+      "tp_pct": 9.502262443438921,
+      "full_outcome": "open",
+      "one_r_outcome": "plus1R"
+    },
+    {
+      "id": "-1002004401199:21808",
+      "date": "2026-09-25T12:46:29Z",
+      "symbol": "MARSCOINUSDT",
+      "direction": "LONG",
+      "entry": 0.12466,
+      "stop": 0.093,
+      "tps": [
+        0.7
+      ],
+      "leverage": 5.0,
+      "cmp": true,
+      "raw": "Marscoin/usdt\nLong position \nEntry CMP \nTp 0.7\nSl 0.09300\nLeverage 5x \nBecareful traders of volatility",
+      "rr": 18.17245735944409,
+      "stop_pct": 25.397080057757105,
+      "tp_pct": 461.52735440397873,
+      "full_outcome": "open",
+      "one_r_outcome": "plus1R"
+    },
+    {
+      "id": "-1002004401199:21796",
+      "date": "2026-09-24T00:45:38Z",
+      "symbol": "RAYUSDT",
+      "direction": "SHORT",
+      "entry": 2.1438,
+      "stop": 2.2,
+      "tps": [
+        1.0
+      ],
+      "leverage": 7.0,
+      "cmp": true,
+      "raw": "Ray/usdt\nShort position \nEntry CMP \nTp 1\nSl 2.200\nLeverage 7x \nStrike it down \nNight food \nAre you awake \ud83d\ude2a \nGrinding continues",
+      "rr": 20.35231316725978,
+      "stop_pct": 2.62151320085829,
+      "tp_pct": 53.35385763597351,
+      "full_outcome": "sl",
+      "one_r_outcome": "plus1R"
+    },
+    {
+      "id": "-1002004401199:21692",
+      "date": "2026-09-19T05:48:37Z",
+      "symbol": "ARBUSDT",
+      "direction": "SHORT",
+      "entry": 0.22305,
+      "stop": 0.25,
+      "tps": [
+        0.15
+      ],
+      "leverage": 10.0,
+      "cmp": false,
+      "raw": "Arb/usdt\nShort position \nQuick one\nScalping \nTp 0.1500\nSl 0.2500\nLeverage 10x \nBecareful traders",
+      "rr": 2.7105751391465676,
+      "stop_pct": 12.082492714637974,
+      "tp_pct": 32.75050437121722,
+      "full_outcome": "sl",
+      "one_r_outcome": "plus1R"
+    },
+    {
+      "id": "-1002004401199:21635",
+      "date": "2026-09-14T21:04:58Z",
+      "symbol": "SIRENUSDT",
+      "direction": "LONG",
+      "entry": 0.02297,
+      "stop": 0.02,
+      "tps": [
+        0.5
+      ],
+      "leverage": 7.0,
+      "cmp": true,
+      "raw": "Night food\nSiren/usdt \nLong position \nEntry CMP \nTp 0.5\nSl 0.0200\nLeverage 7x \nLets go \nSlow and steady \ud83d\udd25",
+      "rr": 160.6161616161616,
+      "stop_pct": 12.929908576404006,
+      "tp_pct": 2076.7522855899,
+      "full_outcome": "open",
+      "one_r_outcome": "plus1R"
+    },
+    {
+      "id": "-1002004401199:21607",
+      "date": "2026-09-12T06:59:32Z",
+      "symbol": "IOSTUSDT",
+      "direction": "SHORT",
+      "entry": 0.0009706,
+      "stop": 0.00103,
+      "tps": [
+        0.00023
+      ],
+      "leverage": 7.0,
+      "cmp": true,
+      "raw": "Iost/usdt\nShort position \nEntry CMP \nTp 0.0002300\nSl 0.0010300\nLeverage 7x \n\nMorning food",
+      "rr": 12.468013468013437,
+      "stop_pct": 6.119925819080995,
+      "tp_pct": 76.303317535545,
+      "full_outcome": "open",
+      "one_r_outcome": "plus1R"
+    },
+    {
+      "id": "-1002004401199:21606",
+      "date": "2026-09-12T06:46:25Z",
+      "symbol": "AKEUSDT",
+      "direction": "LONG",
+      "entry": 0.031333,
+      "stop": 0.00773,
+      "tps": [
+        0.5
+      ],
+      "leverage": 7.0,
+      "cmp": true,
+      "raw": "Ake/usdt\nLong position \nEntry CMP \nTp 0.5\nSl 0.007730\nLeverage 7x \n\nMorning food \nLets go \nApply Risk management",
+      "rr": 19.856247087234674,
+      "stop_pct": 75.32952478217854,
+      "tp_pct": 1495.7616570389046,
+      "full_outcome": "open",
+      "one_r_outcome": "plus1R"
+    },
+    {
+      "id": "-1002004401199:21524",
+      "date": "2026-09-03T06:30:59Z",
+      "symbol": "PONSUSDT",
+      "direction": "LONG",
+      "entry": 0.5695,
+      "stop": 0.44,
+      "tps": [
+        1.5
+      ],
+      "leverage": 10.0,
+      "cmp": false,
+      "raw": "Pons /usdt has a whale's \nAm targeting long \nTp 1.5\nSl 0.4400\nLeverage 10x \nApply Risk management",
+      "rr": 7.185328185328185,
+      "stop_pct": 22.739244951712028,
+      "tp_pct": 163.38893766461808,
+      "full_outcome": "open",
+      "one_r_outcome": "plus1R"
+    },
+    {
+      "id": "-1002004401199:21256",
+      "date": "2026-08-14T12:08:12Z",
+      "symbol": "TRUTHUSDT",
+      "direction": "LONG",
+      "entry": 0.012889,
+      "stop": 0.0118,
+      "tps": [
+        0.05
+      ],
+      "leverage": null,
+      "cmp": false,
+      "raw": "Truth/usdt \ud83d\udd25\ud83d\udd25\ud83d\udd25\ud83d\udd25\nTp 0.05\nSl 0.011800\nLong position \nDon't miss out",
+      "rr": 34.07805325987145,
+      "stop_pct": 8.449065094266427,
+      "tp_pct": 287.92769027853217,
+      "full_outcome": "open",
+      "one_r_outcome": "plus1R"
+    },
+    {
+      "id": "-1002004401199:21255",
+      "date": "2026-08-14T09:50:57Z",
+      "symbol": "TRUTHUSDT",
+      "direction": "LONG",
+      "entry": 0.012889,
+      "stop": 0.0118,
+      "tps": [
+        0.05
+      ],
+      "leverage": null,
+      "cmp": true,
+      "raw": "Truth/usdt\nLong position \nTp 0.05\nSl 0.011800\nCmp",
+      "rr": 34.07805325987145,
+      "stop_pct": 8.449065094266427,
+      "tp_pct": 287.92769027853217,
+      "full_outcome": "open",
+      "one_r_outcome": "plus1R"
+    },
+    {
+      "id": "-1002004401199:21831",
+      "date": "2026-09-28T15:11:11Z",
+      "symbol": "QNTUSDT",
+      "direction": "SHORT",
+      "entry": 229.66,
+      "stop": 248.0,
+      "tps": [
+        120.0
+      ],
+      "leverage": 10.0,
+      "cmp": false,
+      "raw": "Qnt/usdt \ud83d\udd25\ud83d\udd25\ud83d\udd25\ud83d\udd25\ud83d\udd25\ud83d\udd25\nShort it down \nTp 120\nSl 248\nLeverage 10x \n\nStrike it down players",
+      "rr": 5.979280261723009,
+      "stop_pct": 7.985718017939565,
+      "tp_pct": 47.74884612035182,
+      "full_outcome": "sl",
+      "one_r_outcome": "sl"
+    },
+    {
+      "id": "-1002004401199:21720",
+      "date": "2026-09-20T11:38:18Z",
+      "symbol": "INJUSDT",
+      "direction": "SHORT",
+      "entry": 7.751,
+      "stop": 8.5,
+      "tps": [
+        6.0
+      ],
+      "leverage": 10.0,
+      "cmp": true,
+      "raw": "Sunday blessings \ud83d\udd25\ud83d\udd25\ud83d\udd25\ud83d\udd25\n\n\ud83d\udc49Boys my mission is we must win \n\nInj/usdt \nShort position \nEntry CMP \nTp 6\nSl 8.50\nLeverage 10x \nStrike it down",
+      "rr": 2.3377837116154887,
+      "stop_pct": 9.66326925557992,
+      "tp_pct": 22.590633466649468,
+      "full_outcome": "sl",
+      "one_r_outcome": "sl"
+    },
+    {
+      "id": "-1002004401199:21718",
+      "date": "2026-09-20T10:22:04Z",
+      "symbol": "INJUSDT",
+      "direction": "SHORT",
+      "entry": 7.751,
+      "stop": 8.5,
+      "tps": [
+        6.0
+      ],
+      "leverage": 10.0,
+      "cmp": true,
+      "raw": "Inj/usdt \nShort position \nEntry CMP \nTp 6\nSl 8.50\nLeverage 10x \nStrike it down",
+      "rr": 2.3377837116154887,
+      "stop_pct": 9.66326925557992,
+      "tp_pct": 22.590633466649468,
+      "full_outcome": "sl",
+      "one_r_outcome": "sl"
+    },
+    {
+      "id": "-1002004401199:21481",
+      "date": "2026-08-30T10:12:11Z",
+      "symbol": "SKRUSDT",
+      "direction": "SHORT",
+      "entry": 0.018675,
+      "stop": 0.021,
+      "tps": [
+        0.01
+      ],
+      "leverage": 7.0,
+      "cmp": false,
+      "raw": "Please \ud83d\ude4f becareful traders \ud83d\udd25\ud83d\udd25\ud83d\udd25\n\n\nSkr/usdt pumped to 62%\nAm targeting tp 0.01000 zone short position.\n\nMy sl 0.02100\nLeverage 7x \nScalping mode \nBecareful ooo\n\nI saw a spike \ud83d\udc48",
+      "rr": 3.7311827956989236,
+      "stop_pct": 12.449799196787152,
+      "tp_pct": 46.4524765729585,
+      "full_outcome": "sl",
+      "one_r_outcome": "sl"
+    },
+    {
+      "id": "-1002004401199:21480",
+      "date": "2026-08-30T10:02:28Z",
+      "symbol": "SKRUSDT",
+      "direction": "SHORT",
+      "entry": 0.018675,
+      "stop": 0.021,
+      "tps": [
+        0.01
+      ],
+      "leverage": 7.0,
+      "cmp": false,
+      "raw": "Skr/usdt pumped to 62%\nAm targeting tp 0.01000 zone short position.\n\nMy sl 0.02100\nLeverage 7x \nScalping mode \nBecareful ooo\n\nI saw a spike \ud83d\udc48",
+      "rr": 3.7311827956989236,
+      "stop_pct": 12.449799196787152,
+      "tp_pct": 46.4524765729585,
+      "full_outcome": "sl",
+      "one_r_outcome": "sl"
+    },
+    {
+      "id": "-1002004401199:21382",
+      "date": "2026-08-21T20:54:02Z",
+      "symbol": "USUSDT",
+      "direction": "LONG",
+      "entry": 0.027764,
+      "stop": 0.0195,
+      "tps": [
+        0.5
+      ],
+      "leverage": 7.0,
+      "cmp": true,
+      "raw": "Us/usdt\nLong position \nEntry CMP \nTp 0.5\nSl 0.019500\nLeverage 7x \n\nQuick scalping",
+      "rr": 57.143756050338816,
+      "stop_pct": 29.76516352110647,
+      "tp_pct": 1700.893243048552,
+      "full_outcome": "sl",
+      "one_r_outcome": "sl"
+    },
+    {
+      "id": "-1002004401199:21357",
+      "date": "2026-08-21T16:40:02Z",
+      "symbol": "USUSDT",
+      "direction": "LONG",
+      "entry": 0.027764,
+      "stop": 0.0195,
+      "tps": [
+        0.5
+      ],
+      "leverage": 7.0,
+      "cmp": true,
+      "raw": "Us/usdt\nLong position \nEntry CMP \nTp 0.5\nSl 0.019500\nLeverage 7x \n\nQuick scalping",
+      "rr": 57.143756050338816,
+      "stop_pct": 29.76516352110647,
+      "tp_pct": 1700.893243048552,
+      "full_outcome": "sl",
+      "one_r_outcome": "sl"
+    }
+  ]
+}

@@ -7,7 +7,7 @@ is authenticated. That double latch is intentional.
 from __future__ import annotations
 
 import os
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime, timezone
 from decimal import Decimal
 
@@ -94,6 +94,11 @@ def run_cycle(
     limits = limits or Limits()
     exposure_limits = exposure_limits or ExposureLimits()
 
+    allow_live = live or os.environ.get("FXGLITCH_LIVE") == "1"
+    if proposal is None and message:
+        proposal = from_signal(message, leverage_cap=limits.max_leverage)
+    if proposal is not None and proposal.symbol != "UNKNOWN":
+        symbol = proposal.symbol
     if briefing is None:
         kwargs = {} if transport is None else {"transport": transport}
         briefing = fetch_briefing(symbol, **kwargs)
@@ -101,10 +106,21 @@ def run_cycle(
     if proposal is None:
         proposal = from_signal(message, leverage_cap=limits.max_leverage) if message else from_briefing(briefing)
 
-    if venue is not None and getattr(venue, "authenticated", False) and balance is None:
-        balance = venue.balance()
-        if positions is None:
+    account_state = None
+    if venue is not None and getattr(venue, "authenticated", False):
+        if balance is None or allow_live:
+            balance = venue.balance()
+        if positions is None or allow_live:
             positions = venue.positions()
+        if allow_live:
+            from .protection import ACCOUNT_LOCK, observe_account
+
+            with ACCOUNT_LOCK:
+                account_state = observe_account(venue, balance)
+            if proposal.action == "open":
+                mark = venue.mark_price(proposal.symbol)
+                proposal = replace(proposal, entry=mark)
+                briefing = replace(briefing, mark_price=mark)
     if balance is None:
         balance = paper_balance(paper_equity)
     if positions is None:
@@ -117,16 +133,18 @@ def run_cycle(
         briefing=briefing,
         limits=limits,
         exposure_limits=exposure_limits,
-        day_open_equity=balance.equity,
+        day_open_equity=account_state.day_open_equity if account_state else balance.equity,
     )
+    if account_state is not None and account_state.halted:
+        policy = PolicyDecision(False, account_state.halt_reason, fatal=True, checks=policy.checks)
 
     sent = False
     order = None
-    allow_live = live or os.environ.get("FXGLITCH_LIVE") == "1"
     if allow_live and policy.allowed and proposal.action == "open" and venue is not None:
         if not getattr(venue, "authenticated", False):
             policy = PolicyDecision(False, "live send refused: venue has no API keys", checks=policy.checks)
         elif policy.sized_qty:
+            venue.set_leverage(proposal.symbol, proposal.leverage)
             side = LONG if proposal.direction == "LONG" else -1
             result = venue.place(OrderRequest(
                 symbol=proposal.symbol,

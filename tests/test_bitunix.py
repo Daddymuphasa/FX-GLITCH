@@ -110,6 +110,8 @@ class TestTwoAccounts(unittest.TestCase):
             "BITUNIX_API_KEY", "BITUNIX_SECRET_KEY", "BITUNIX_NAME",
             "BITUNIX_API_KEY_1", "BITUNIX_SECRET_KEY_1", "BITUNIX_NAME_1",
             "BITUNIX_API_KEY_2", "BITUNIX_SECRET_KEY_2", "BITUNIX_NAME_2",
+            "BITUNIX_API_KEY_3", "BITUNIX_SECRET_KEY_3", "BITUNIX_NAME_3",
+            "BITUNIX_API_KEY_4", "BITUNIX_SECRET_KEY_4", "BITUNIX_NAME_4",
         )}
         for k in self._old:
             os.environ.pop(k, None)
@@ -146,6 +148,45 @@ class TestTwoAccounts(unittest.TestCase):
         self.assertTrue(listed[0]["ready"] and listed[1]["ready"])
         self.assertNotIn("k2", str(listed))
         self.assertNotIn("s2", str(listed))
+
+    def test_slot_three_uses_its_own_credentials(self):
+        os.environ["BITUNIX_API_KEY_2"] = "k2"
+        os.environ["BITUNIX_SECRET_KEY_2"] = "s2"
+        os.environ["BITUNIX_API_KEY_3"] = "k3"
+        os.environ["BITUNIX_SECRET_KEY_3"] = "s3"
+        os.environ["BITUNIX_NAME_3"] = "third"
+        second, third = from_slot(2), from_slot(3)
+        self.assertEqual(second.api_key, "k2")
+        self.assertEqual(third.api_key, "k3")
+        self.assertEqual(third.account_name, "third")
+        listed = listed_accounts()
+        self.assertEqual(len(listed), 4)
+        self.assertTrue(listed[2]["ready"])
+        self.assertFalse(listed[2]["coming_soon"])
+        self.assertFalse(listed[3]["ready"])
+        self.assertTrue(listed[3]["coming_soon"])
+        self.assertEqual(listed[3]["name"], "kazi")
+        self.assertNotIn("k3", str(listed))
+        self.assertNotIn("s3", str(listed))
+
+    def test_slot_four_uses_its_own_credentials(self):
+        os.environ["BITUNIX_API_KEY_4"] = "k4"
+        os.environ["BITUNIX_SECRET_KEY_4"] = "s4"
+        os.environ["BITUNIX_NAME_4"] = "kazi"
+        fourth = from_slot(4)
+        self.assertEqual(fourth.api_key, "k4")
+        self.assertEqual(fourth.account_name, "kazi")
+        listed = listed_accounts()
+        self.assertTrue(listed[3]["ready"])
+        self.assertFalse(listed[3]["coming_soon"])
+        self.assertEqual(listed[3]["name"], "kazi")
+        self.assertNotIn("k4", str(listed))
+        self.assertNotIn("s4", str(listed))
+
+    def test_default_display_names(self):
+        listed = listed_accounts()
+        self.assertEqual([row["name"] for row in listed],
+                         ["muphasa", "merrijeh", "ekeson", "kazi"])
 
 
 class TestCredentials(unittest.TestCase):
@@ -397,13 +438,18 @@ class TestOrders(unittest.TestCase):
         self.assertEqual(caught.exception.code, "unknown-symbol")
 
     def test_place_plan_sets_leverage_and_sends_sl_tp(self):
+        from unittest.mock import patch
+        from fxglitch.agent.protection import AccountState
+
         c = self.order_client()
         rec = recommend(
             "BTCUSDT\nLong position\nEntry 100000\nTp 106000\nSl 98000\nLeverage 10x",
             equity=1000, mark=100000, instruments=c.instruments(),
         )
         mid = next(p for p in rec.plans if p["id"] == "mid")
-        placed = place_plan(c, rec, mid)
+        with patch.object(c, "mark_price", return_value=100000), \
+             patch("fxglitch.agent.protection.observe_account", return_value=AccountState(day="2026-09-20")):
+            placed = place_plan(c, rec, mid)
         self.assertTrue(placed["sent"])
         self.assertEqual(placed["symbol"], "BTCUSDT")
         lev = [x for x in c._transport.calls if "change_leverage" in x["url"]]

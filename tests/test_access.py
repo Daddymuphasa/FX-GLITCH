@@ -54,6 +54,13 @@ class TestAccessCodes(unittest.TestCase):
         self.assertEqual(payload["account"], 2)
         self.assertIn("Set-Cookie", extra)
 
+    def test_health_exposes_sizing_version(self):
+        from fxglitch.agent.http_api import dispatch
+        from fxglitch.agent.plans import SIZING_VERSION
+        status, _, body = dispatch("GET", "/api/health", {}, {}, {"Host": "localhost:8765"})
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body)["sizing_version"], SIZING_VERSION)
+
     def test_account_three_is_listed(self):
         rows = listed_accounts()
         self.assertEqual([r["id"] for r in rows], [1, 2, 3])

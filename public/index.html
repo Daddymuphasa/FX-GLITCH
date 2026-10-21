@@ -90,9 +90,20 @@
       </div>
     </section>
 
+    <section class="glass live-board" id="live-board">
+      <div class="panel-head">
+        <h2>Live desk</h2>
+        <span class="pill" id="live-watch">desk</span>
+      </div>
+      <p class="hint" id="live-updated">Loading live book…</p>
+      <div class="stats" id="live-balance"></div>
+      <h3 class="subhead">Running trades</h3>
+      <div id="live-positions"></div>
+    </section>
+
     <section class="glass feed">
-      <h2>Open now</h2>
-      <p class="hint" id="inbox-hint">Pick a setup. Then choose how hard.</p>
+      <h2>Available setups</h2>
+      <p class="hint" id="inbox-hint">Cosmas setups still good to enter.</p>
       <div id="inbox"></div>
     </section>
 
@@ -116,6 +127,7 @@
       <select id="bx-account">
         <option value="1">1</option>
         <option value="2">2</option>
+        <option value="3" disabled>3 · empty</option>
       </select>
     </label>
     <label class="equity-mini">USDT <input id="equity" type="number" inputmode="decimal" value="1000" min="10" step="10" /></label>
@@ -125,7 +137,7 @@
   <dialog id="keys-dialog" class="glass">
     <form method="dialog" id="keys-form">
       <h2>Bitunix on this desk</h2>
-      <p class="hint" id="keys-hint">Two accounts in <code>.env</code>: <code>BITUNIX_API_KEY</code> / <code>BITUNIX_SECRET_KEY</code> and <code>BITUNIX_API_KEY_2</code> / <code>BITUNIX_SECRET_KEY_2</code>. Keys never go in the browser. Pick 1 or 2 in the take bar.</p>
+      <p class="hint" id="keys-hint">Up to three accounts can be configured in <code>.env</code>. Account 3 uses <code>BITUNIX_API_KEY_3</code> and <code>BITUNIX_SECRET_KEY_3</code>. Keys never go in the browser; ready accounts appear in the take bar.</p>
       <label class="toggle"><input id="send-live" type="checkbox" /> Send live to Bitunix (off = paper)</label>
       <menu>
         <button value="cancel" type="submit">Close</button>

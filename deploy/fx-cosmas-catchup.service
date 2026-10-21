@@ -1,0 +1,11 @@
+[Unit]
+Description=FX-GLITCH Cosmas catch-up (one shot)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/fx-glitch
+Environment=COSMAS_CATCHUP_HOURS=18
+ExecStart=/opt/fx-glitch/deploy/fx-cosmas-catchup.sh
+# Do not restart on success; timer owns cadence

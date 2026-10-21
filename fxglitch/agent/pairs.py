@@ -29,7 +29,7 @@ def normalize_usdt(raw: str | None) -> str | None:
         symbol = symbol[:-4]
     if not symbol.endswith("USDT"):
         symbol = f"{symbol}USDT"
-    if not symbol.endswith("USDT") or len(symbol) < 7:
+    if not symbol.endswith("USDT") or len(symbol) < 5:
         return None
     return symbol
 

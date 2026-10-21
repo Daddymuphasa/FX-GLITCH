@@ -115,7 +115,15 @@ async function readJson(res) {
     return JSON.parse(text);
   } catch (_err) {
     const where = res.url || "the API";
-    throw new Error(`The website API returned a page instead of JSON (${res.status} from ${where}). Please redeploy the API.`);
+    const snippet = (text || "").replace(/\s+/g, " ").trim().slice(0, 80);
+    if (/The page could not be found|NOT_FOUND|Vercel/i.test(text || "")) {
+      throw new Error(
+        "Login API is still hitting Vercel (HTML 404), not the VPS desk. Point fxglitch.xyz A records to 187.124.113.6, or open http://187.124.113.6:8765 for now."
+      );
+    }
+    throw new Error(
+      `The website API returned a page instead of JSON (${res.status} from ${where}: ${snippet || "empty"}). Point DNS to the VPS or redeploy the API.`
+    );
   }
 }
 
@@ -194,7 +202,7 @@ function applySession(me) {
   document.documentElement.classList.toggle("is-user", signedIn);
   document.documentElement.classList.toggle("is-admin", isAdmin);
   if (signedIn) document.documentElement.classList.remove("is-peek");
-  else if (adminQuery) document.documentElement.classList.add("is-peek");
+  else document.documentElement.classList.add("is-peek");
   const who = document.getElementById("who");
   const acct = me && me.account ? " · acct " + me.account : "";
   if (who) who.textContent = signedIn ? (meName + acct + (isAdmin ? " · operator" : "")) : "";
@@ -288,6 +296,82 @@ function uniqueSignals(signals) {
   });
   out.sort((a, b) => String(b.posted_at || b.received_at || "").localeCompare(String(a.posted_at || a.received_at || "")));
   return out;
+}
+
+function fmtPx(n) {
+  if (n === null || n === undefined || n === "") return "—";
+  const v = Number(n);
+  if (!Number.isFinite(v)) return "—";
+  return v >= 1 ? v.toFixed(4).replace(/0+$/, "").replace(/\.$/, "") : v.toPrecision(4);
+}
+
+function renderLiveBoard(data) {
+  const watch = document.getElementById("live-watch");
+  const updated = document.getElementById("live-updated");
+  const balEl = document.getElementById("live-balance");
+  const posEl = document.getElementById("live-positions");
+  if (!watch || !updated || !balEl || !posEl) return;
+  const watching = data && data.watching === "watching";
+  watch.textContent = watching ? "watching Cosmas" : (data && data.watching) || "desk";
+  watch.className = "pill" + (watching ? " ok" : " warn");
+  const when = (data && data.updated) ? String(data.updated).replace("T", " ").replace("Z", " UTC") : "";
+  if (data && data.error) updated.textContent = data.error;
+  else updated.textContent = when ? ("Book " + when) : "Live book";
+  const b = (data && data.balance) || null;
+  if (!b) {
+    balEl.innerHTML = "<p class='hint'>Balance unavailable.</p>";
+  } else {
+    const pnl = Number(b.unrealised_pnl) || 0;
+    const pnlCls = pnl > 0 ? "up" : (pnl < 0 ? "down" : "");
+    balEl.innerHTML =
+      "<div class='stat'><small>Available</small><b>" + money(b.available) + "</b></div>" +
+      "<div class='stat'><small>In trades</small><b>" + money(b.used) + "</b></div>" +
+      "<div class='stat'><small>uPnL</small><b class='pnl " + pnlCls + "'>" + money(b.unrealised_pnl) + "</b></div>" +
+      "<div class='stat'><small>Equity</small><b>" + money(b.equity) + "</b></div>";
+  }
+  const rows = (data && data.positions) || [];
+  if (!rows.length) {
+    posEl.innerHTML = "<p class='hint'>No running trades.</p>";
+  } else {
+    posEl.innerHTML = "";
+    rows.forEach((p) => {
+      const div = document.createElement("div");
+      const side = (p.side || "").toUpperCase();
+      const dir = side === "SHORT" ? '<span class="dir short">SHORT</span>' : '<span class="dir long">LONG</span>';
+      const pnl = Number(p.unrealised_pnl) || 0;
+      const pnlCls = pnl > 0 ? "up" : (pnl < 0 ? "down" : "");
+      div.className = "item live-pos";
+      div.innerHTML = "<div class='pair'>" + dir + " " + (p.symbol || "—") +
+        " <span class='tag'>" + (p.leverage || "—") + "x</span></div>" +
+        "<div class='stats'>" +
+        "<div class='stat'><small>Qty</small><b>" + (p.qty ?? "—") + "</b></div>" +
+        "<div class='stat'><small>Entry</small><b>" + fmtPx(p.entry) + "</b></div>" +
+        "<div class='stat'><small>Mark</small><b>" + fmtPx(p.mark) + "</b></div>" +
+        "<div class='stat'><small>SL</small><b>" + fmtPx(p.sl) + "</b></div>" +
+        "<div class='stat'><small>TP</small><b>" + fmtPx(p.tp) + "</b></div>" +
+        "<div class='stat'><small>ROI</small><b class='pnl " + pnlCls + "'>" + (p.roi ?? "—") + "%</b></div>" +
+        "</div>" +
+        "<div class='meta'>uPnL <span class='pnl " + pnlCls + "'>" + money(p.unrealised_pnl) +
+        "</span> · liq " + fmtPx(p.liq) + "</div>";
+      posEl.appendChild(div);
+    });
+  }
+  const available = (data && data.available) || [];
+  if (available.length) renderInbox(available);
+}
+
+async function refreshLiveBoard() {
+  try {
+    renderLiveBoard(await get("/api/status"));
+  } catch (err) {
+    const updated = document.getElementById("live-updated");
+    if (updated) updated.textContent = err.message || "Live book unavailable";
+  }
+}
+
+function startLiveBoard() {
+  refreshLiveBoard();
+  setInterval(refreshLiveBoard, 8000);
 }
 
 function renderInbox(signals) {
@@ -614,6 +698,8 @@ function paintKeysButton() {
 
 async function boot() {
   wipeBrowserKeys();
+  document.documentElement.classList.add("is-peek");
+  startLiveBoard();
   try {
     const health = await get("/api/health");
     applySession(health.me || { signed_in: false });

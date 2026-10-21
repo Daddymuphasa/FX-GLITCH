@@ -1,0 +1,1493 @@
+{
+  "document_type": "cosmas_trading_strategy_knowledge",
+  "version": "2.0.0",
+  "updated_at": "2026-10-01T01:37:30Z",
+  "purpose": "Paste this JSON into another AI/agent so it can recommend Bitunix USDT-M futures setups in the style of Cosmas (Telegram channel Cosmas trading/forex signals).",
+  "source": {
+    "telegram_chat_id": -1002004401199,
+    "title": "Cosmas trading/forex signals",
+    "venue_emphasis": "Bitunix",
+    "study_corpus_messages": 462,
+    "valid_geometry_setups": 45,
+    "method": [
+      "Fetch recent Cosmas messages via Telethon (study session copy)",
+      "Parse symbol/direction/entry/SL/TP/leverage",
+      "Keep only valid geometry: LONG stop<entry<tp, SHORT stop>entry>tp",
+      "Score outcomes on Bitunix candles (1h first-touch of SL/TP and +1R vs -1R)",
+      "Correlate each valid setup with BTCUSDT/ETHUSDT 24h returns before/after post time",
+      "Tag symbols into ecosystems (BTC/ETH/Solana/meme/AI/L2/new-listing/etc.)",
+      "Mine risk-management coaching language from non-setup messages"
+    ],
+    "limitations": [
+      "Not every Cosmas post is a clean executable setup; many are teasers, promos, or SL/TP swapped",
+      "Full TP hit-rate looks poor because TPs are often extreme runners; use +1R-before-SL as structural edge metric",
+      "News linkage is proxied via BTC/ETH regime and ecosystem tags; discrete headline IDs are not scraped yet",
+      "Position size in USDT is rarely stated; risk is expressed via leverage + wide SL + profit-taking coaching"
+    ]
+  },
+  "trader_persona": {
+    "name": "Cosmas",
+    "style_summary": "High-conviction Bitunix USDT perpetual calls, mostly market/CMP entries, moderate leverage (often 7x), wide invalidation stops, asymmetric moonshot take-profits, heavy alt/meme/new-listing focus, with frequent community coaching to take profits and respect manipulation/volatility.",
+    "communication_template": {
+      "typical_setup_format": [
+        "<Symbol> /usdt",
+        "<Long|Short> position",
+        "Entry CMP",
+        "Tp <price>",
+        "Sl <price>",
+        "Leverage <N>x",
+        "optional: Scalping | Night research | Becareful of volatility"
+      ],
+      "example_setup": "Qnt /usdt\nShort position\nEntry CMP\nTp 270\nSl 311\nLeverage 10x\nScalping\nBecareful of volatility",
+      "top_message_templates": [
+        [
+          "LONG+CMP+SL+TP+LEV7",
+          7
+        ],
+        [
+          "SHORT+NOENTRY+NOSL+NOTP+NOLEV",
+          5
+        ],
+        [
+          "LONG+CMP+SL+TP+NOLEV",
+          5
+        ],
+        [
+          "SHORT+CMP+SL+TP+LEV7",
+          4
+        ],
+        [
+          "SHORT+CMP+SL+TP+LEV7+SCALP",
+          4
+        ],
+        [
+          "SHORT+ENTRY+SL+TP+LEV10",
+          3
+        ],
+        [
+          "LONG+CMP+SL+TP+LEV7+SCALP",
+          3
+        ],
+        [
+          "SHORT+CMP+SL+TP+LEV7+VOLWARN",
+          3
+        ],
+        [
+          "LONG+ENTRY+SL+TP+LEV7",
+          3
+        ],
+        [
+          "SHORT+ENTRY+SL+TP+NOLEV",
+          3
+        ],
+        [
+          "SHORT+NOENTRY+SL+NOTP+LEV7",
+          3
+        ],
+        [
+          "SHORT+CMP+NOSL+NOTP+NOLEV",
+          3
+        ],
+        [
+          "SHORT+ENTRY+SL+TP+LEV7",
+          3
+        ],
+        [
+          "LONG+NOENTRY+NOSL+NOTP+NOLEV",
+          3
+        ],
+        [
+          "SHORT+CMP+SL+TP+LEV10",
+          2
+        ]
+      ],
+      "message_type_mix": {
+        "bias_teaser": 30,
+        "promo": 82,
+        "trade_setup": 70,
+        "community": 18,
+        "risk_coaching": 14,
+        "partial_setup": 65,
+        "other": 183
+      }
+    }
+  },
+  "how_he_takes_trades": {
+    "market": "USDT-margined crypto futures (Bitunix-first)",
+    "entry": {
+      "primary": "CMP / market order (majority of valid setups)",
+      "cmp_share_valid": 0.711,
+      "rare": "Explicit numeric entry when not CMP"
+    },
+    "direction_selection": {
+      "mix_valid": {
+        "SHORT": 21,
+        "LONG": 24
+      },
+      "vs_btc_24h_before": {
+        "btc_chop": 4,
+        "with_btc_trend": 7,
+        "counter_btc": 3,
+        "unknown": 31
+      },
+      "interpretation": "Not a pure BTC-beta slave: mix of with-trend and counter-BTC alt calls; many names are idiosyncratic new listings/memes."
+    },
+    "symbol_universe": {
+      "ecosystem_tag_counts": {
+        "unknown/new-listing": 55,
+        "new-listing": 52,
+        "meme": 29,
+        "solana": 10,
+        "ai": 6,
+        "defi": 5,
+        "ethereum": 5,
+        "L1": 5,
+        "launchpad": 4,
+        "harmony": 3,
+        "interop": 2,
+        "enterprise": 2,
+        "injective": 2,
+        "cosmos-adjacent": 2,
+        "worldcoin": 2,
+        "commodity": 2,
+        "gold": 2,
+        "macro": 2,
+        "major": 2,
+        "dex": 1,
+        "l2": 1,
+        "arbitrum": 1,
+        "ethena": 1,
+        "ripple": 1
+      },
+      "ecosystem_direction_skew": {
+        "interop": {
+          "SHORT": 2
+        },
+        "enterprise": {
+          "SHORT": 2
+        },
+        "new-listing": {
+          "LONG": 15,
+          "SHORT": 20
+        },
+        "meme": {
+          "LONG": 16,
+          "SHORT": 4
+        },
+        "solana": {
+          "SHORT": 2,
+          "LONG": 4
+        },
+        "defi": {
+          "SHORT": 4
+        },
+        "dex": {
+          "SHORT": 1
+        },
+        "unknown/new-listing": {
+          "SHORT": 10,
+          "LONG": 10
+        },
+        "injective": {
+          "SHORT": 2
+        },
+        "cosmos-adjacent": {
+          "SHORT": 2
+        },
+        "ethereum": {
+          "SHORT": 2
+        },
+        "l2": {
+          "SHORT": 1
+        },
+        "arbitrum": {
+          "SHORT": 1
+        },
+        "harmony": {
+          "SHORT": 1
+        },
+        "L1": {
+          "SHORT": 2
+        },
+        "ethena": {
+          "SHORT": 1
+        },
+        "commodity": {
+          "SHORT": 2
+        },
+        "gold": {
+          "SHORT": 2
+        },
+        "macro": {
+          "SHORT": 2
+        },
+        "ripple": {
+          "SHORT": 1
+        }
+      },
+      "frequent_valid_symbols": [
+        [
+          "SKRUSDT",
+          5
+        ],
+        [
+          "PIPPINUSDT",
+          4
+        ],
+        [
+          "TRUTHUSDT",
+          3
+        ],
+        [
+          "QNTUSDT",
+          2
+        ],
+        [
+          "TUTUSDT",
+          2
+        ],
+        [
+          "INJUSDT",
+          2
+        ],
+        [
+          "WIFUSDT",
+          2
+        ],
+        [
+          "USUSDT",
+          2
+        ],
+        [
+          "PUMPUSDT",
+          2
+        ],
+        [
+          "ACTUSDT",
+          2
+        ],
+        [
+          "MARSCOINUSDT",
+          1
+        ],
+        [
+          "RAYUSDT",
+          1
+        ],
+        [
+          "MUBARAKUSDT",
+          1
+        ],
+        [
+          "ZETAUSDT",
+          1
+        ],
+        [
+          "ARBUSDT",
+          1
+        ],
+        [
+          "SIRENUSDT",
+          1
+        ],
+        [
+          "KOMAUSDT",
+          1
+        ],
+        [
+          "IOSTUSDT",
+          1
+        ],
+        [
+          "AKEUSDT",
+          1
+        ],
+        [
+          "METUSDT",
+          1
+        ]
+      ],
+      "bias": "Heavy on new listings, memes, Solana ecosystem, and occasional majors/macro (XAU) \u2014 not only BTC/ETH pairs"
+    },
+    "timing_tags": {
+      "scalping_share_approx": 0.11,
+      "night_research_present": 23,
+      "volatility_warnings": 17
+    },
+    "execution_checklist_for_agents": [
+      "Parse Cosmas-like fields: symbol, direction, CMP entry, SL, TP, leverage, tags",
+      "Reject invalid geometry (SL/TP on wrong side of entry)",
+      "Confirm Bitunix lists the symbol as a tradeable perp",
+      "Check live mark still between SL and TP with acceptable live R:R",
+      "Prefer CROSS + stated leverage (or desk policy floor) and attach SL/TP immediately",
+      "Plan profit-taking / BE before full moonshot TP"
+    ]
+  },
+  "risk_management": {
+    "explicit_rules_from_coaching": [
+      "Always take calculated risk before execution",
+      "Profit taking matters \u2014 secure profits when you see them (do not wait only for final TP)",
+      "Community does not control the market; manipulation is real",
+      "Be careful of volatility on scalps",
+      "Fund/trade liquid venue (Bitunix messaging) \u2014 operational risk awareness"
+    ],
+    "phrase_frequencies": {
+      "mentions_sl": 266,
+      "mentions_tp": 228,
+      "venue_bitunix": 117,
+      "funding_call": 21,
+      "volatility_warning": 17,
+      "scalping_tag": 51,
+      "mentions_leverage": 104,
+      "cmp_entry": 52,
+      "profit_taking": 31,
+      "calculated_risk": 1,
+      "manipulation_warning": 8,
+      "no_control_market": 1,
+      "night_session": 8,
+      "research_tag": 15
+    },
+    "sample_coaching_messages": [
+      {
+        "date": "2026-09-29T10:27:27Z",
+        "raw": "Drift \ud83d\udd25\ud83d\udd25\ud83d\udd25\ud83d\udd25\ud83d\udd25\nMy mission traders must win\n\ud83d\udc49 Remember profit Taking matters alot once you see.\n\nDrift tp 0.8\nSl 0.01700"
+      },
+      {
+        "date": "2026-09-29T08:48:18Z",
+        "raw": "Drift uptrends tp 0.8\ud83d\udcc8 \n\ud83d\udc49 Please community you know we don't control market, please anytime you are trading and you see profit always secure.\n\nManipulation is always real\nAlways take calculated Risk before execution."
+      },
+      {
+        "date": "2026-09-22T18:46:01Z",
+        "raw": "Hot \ud83d\udd25\ud83d\udd25 \nZeta to zero \nWe must win \nTp 0.02300\nSl 0.0740\n\n\ud83d\udc49\ud83d\udc49Remember profit Taking matters alot"
+      },
+      {
+        "date": "2026-09-18T10:19:29Z",
+        "raw": "Hot \ud83d\udd25\ud83d\udd25 \nBoys must win \nCheck out your profit \n\nUseless tp 0.100\nSl 0.28409\n\nBecareful traders once you see profit secure"
+      },
+      {
+        "date": "2026-09-17T17:46:42Z",
+        "raw": "One after 500% profit hit , sl triggered, trading currently once you see profit always secure.\n\ud83d\udc49One sl triggered"
+      },
+      {
+        "date": "2026-08-27T00:26:10Z",
+        "raw": "Motion \ud83d\udd25\ud83d\udd25 \nRemember I told you to adjust your sl to 0.15890\n\nTp 0.08\nLeverage 10x \nSlow and steady \ud83e\udd1d \nBtr to zero\n\n\nRemember profit Taking scalping \ud83d\udc48\ud83d\udc48"
+      },
+      {
+        "date": "2026-08-26T07:48:46Z",
+        "raw": "Scalping means once you see profit secure \n\nTp 1.2 \nSl 4.50\nLeverage 10x"
+      },
+      {
+        "date": "2026-08-23T11:15:59Z",
+        "raw": "Scalping \u2705 \nTao scalping \nTp 250\nSl 195\nPlease \ud83d\ude4f scalping oooooooo\nOnce you see profit secure please \ud83d\ude4f"
+      },
+      {
+        "date": "2026-08-23T10:29:51Z",
+        "raw": "\ud83d\udd25\ud83d\udd25\ud83d\udd25\n\nScalping means once you see profit secure.\n\nPlease \ud83d\ude4f now in the market is dangerous \n\nNo sleeping \nTao scalping targeting profit \nTp 250 \nSl 195 scalping"
+      },
+      {
+        "date": "2026-08-23T09:05:54Z",
+        "raw": "Scalping means once you see profit secure.\n\nPlease \ud83d\ude4f now in the market is dangerous \n\nNo sleeping \nTao scalping targeting profit \nTp 250 \nSl 195 scalping"
+      },
+      {
+        "date": "2026-08-22T14:35:35Z",
+        "raw": "Us sl triggered after the move , holding wif still\nScalping once you see profit always secure, market is not encouraging."
+      },
+      {
+        "date": "2026-08-18T05:25:31Z",
+        "raw": "Be active \ud83d\udd25\ud83d\udd25\ud83d\udd25\ud83d\udd25\nScalping means once you see profit secure \n\nTp 0.3 \nSl 0.9300"
+      }
+    ],
+    "leverage_policy": {
+      "observed_values": {
+        "10.0": 10,
+        "7.0": 24,
+        "5.0": 4,
+        "4.0": 2
+      },
+      "average": 7.4,
+      "typical": "7x most common; 10x next; occasional 20-25x on select names (e.g. metals/high conviction)",
+      "agent_default": "7x to 10x for Cosmas-style suggestions; do not blindly copy 25x"
+    },
+    "stop_loss_policy": {
+      "median_stop_distance_pct_of_entry": 29.76516352110647,
+      "p25_stop_pct": 9.66326925557992,
+      "p75_stop_pct": 50.77484047402005,
+      "average_stop_pct": 40.814736105993795,
+      "style": "Structural/wide invalidation on alts \u2014 often far beyond tight scalp stops. SL is the thesis invalidation, not a 0.2% noise stop."
+    },
+    "take_profit_policy": {
+      "median_tp_distance_pct_of_entry": 106.1005770816158,
+      "median_planned_rr": 8.886734693877552,
+      "average_planned_rr": 34.453793915278744,
+      "style": "Asymmetric runners / moonshots. Final TP is aspirational; coaching emphasizes intermediate profit-taking.",
+      "practical_management": [
+        "Treat TP1 as a runner target (multi-R)",
+        "Scale out or move stop to BE after ~+1R",
+        "Do not grade the strategy only on whether final TP prints"
+      ]
+    },
+    "position_sizing": {
+      "stated_in_messages": "Rarely specifies USDT margin; risk is implicit via leverage and stop distance",
+      "agent_recommendation": "Size so invalidation loss is a fixed small % of equity (desk often ~daredevil risk tier / ~$5 margin on small accounts), never full TP distance as assumed loss"
+    },
+    "structural_edge_metric": {
+      "plus1R_before_minus1R": 0.6666666666666666,
+      "full_tp_win_rate_resolved": 0.1,
+      "interpretation": "Use +1R-before-SL hit rate as the learning/quality metric; full TP rate understates edge because TPs are extreme."
+    }
+  },
+  "btc_eth_major_context": {
+    "method": "For each valid Cosmas setup, measure BTCUSDT and ETHUSDT spot-perp mark proxy via 1h closes: return 24h before post and 24h after post.",
+    "btc_regime_when_setups_posted_24h_before": {
+      "btc_flat": 4,
+      "btc_down": 5,
+      "btc_up": 3,
+      "btc_up_gt3": 2,
+      "na": 31
+    },
+    "eth_regime_when_setups_posted_24h_before": {
+      "eth_down": 6,
+      "eth_flat": 1,
+      "eth_up": 5,
+      "eth_up_gt3": 2,
+      "na": 31
+    },
+    "direction_alignment_vs_btc_24h_before": {
+      "btc_chop": 4,
+      "with_btc_trend": 7,
+      "counter_btc": 3,
+      "unknown": 31
+    },
+    "avg_btc_24h_before_on_valid": 0.5814709914118759,
+    "avg_eth_24h_before_on_valid": 0.680412418567091,
+    "avg_btc_24h_after_on_valid": 0.10870350838423785,
+    "avg_eth_24h_after_on_valid": -0.10031886857620029,
+    "ecosystem_relative_to_majors": {
+      "bitcoin_related_tags": [
+        "bitcoin",
+        "ordinals",
+        "stacks"
+      ],
+      "ethereum_related_tags": [
+        "ethereum",
+        "l2",
+        "defi",
+        "ethena",
+        "rwa",
+        "oracle"
+      ],
+      "solana_related_tags": [
+        "solana",
+        "meme",
+        "dex",
+        "launchpad"
+      ],
+      "observation": "Many calls are alt/meme/new-listing beta plays that still feel BTC risk-on/risk-off; always check BTC regime before suggesting aggressive longs in risk-off or aggressive shorts in strong BTC squeezes unless idiosyncratic catalyst."
+    },
+    "agent_context_checks_before_recommend": [
+      "BTC 4h/24h trend and distance to session high/low",
+      "ETH/BTC relative strength if suggesting ETH-ecosystem alts",
+      "Solana ecosystem strength if suggesting SOL memes/DEX tokens",
+      "Avoid stacking many same-direction high-beta alts when BTC is already extended into your stop side",
+      "If a major news window is known (FOMC, ETF flows, exploit, listing), require wider SL or smaller size \u2014 Cosmas volatility warnings map to this"
+    ],
+    "active_days": [
+      {
+        "day": "2026-09-07",
+        "n_setups": 1,
+        "avg_btc_24h_before": null,
+        "symbols": [
+          "PIPPINUSDT"
+        ],
+        "dirs": {
+          "LONG": 1
+        },
+        "note": "normal"
+      },
+      {
+        "day": "2026-09-08",
+        "n_setups": 1,
+        "avg_btc_24h_before": null,
+        "symbols": [
+          "PIPPINUSDT"
+        ],
+        "dirs": {
+          "LONG": 1
+        },
+        "note": "normal"
+      },
+      {
+        "day": "2026-09-09",
+        "n_setups": 1,
+        "avg_btc_24h_before": null,
+        "symbols": [
+          "METUSDT"
+        ],
+        "dirs": {
+          "LONG": 1
+        },
+        "note": "normal"
+      },
+      {
+        "day": "2026-09-12",
+        "n_setups": 2,
+        "avg_btc_24h_before": -0.00504762890866921,
+        "symbols": [
+          "IOSTUSDT",
+          "AKEUSDT"
+        ],
+        "dirs": {
+          "SHORT": 1,
+          "LONG": 1
+        },
+        "note": "normal"
+      },
+      {
+        "day": "2026-09-13",
+        "n_setups": 1,
+        "avg_btc_24h_before": -0.8476209819828757,
+        "symbols": [
+          "KOMAUSDT"
+        ],
+        "dirs": {
+          "LONG": 1
+        },
+        "note": "normal"
+      },
+      {
+        "day": "2026-09-14",
+        "n_setups": 1,
+        "avg_btc_24h_before": 1.8773923553328697,
+        "symbols": [
+          "SIRENUSDT"
+        ],
+        "dirs": {
+          "LONG": 1
+        },
+        "note": "normal"
+      },
+      {
+        "day": "2026-09-19",
+        "n_setups": 1,
+        "avg_btc_24h_before": 4.593468959872343,
+        "symbols": [
+          "ARBUSDT"
+        ],
+        "dirs": {
+          "SHORT": 1
+        },
+        "note": "normal"
+      },
+      {
+        "day": "2026-09-20",
+        "n_setups": 2,
+        "avg_btc_24h_before": -1.0670654528453534,
+        "symbols": [
+          "INJUSDT",
+          "INJUSDT"
+        ],
+        "dirs": {
+          "SHORT": 2
+        },
+        "note": "normal"
+      },
+      {
+        "day": "2026-09-21",
+        "n_setups": 1,
+        "avg_btc_24h_before": 6.400362071744762,
+        "symbols": [
+          "ZETAUSDT"
+        ],
+        "dirs": {
+          "SHORT": 1
+        },
+        "note": "normal"
+      },
+      {
+        "day": "2026-09-22",
+        "n_setups": 1,
+        "avg_btc_24h_before": -0.46300147901645067,
+        "symbols": [
+          "MUBARAKUSDT"
+        ],
+        "dirs": {
+          "SHORT": 1
+        },
+        "note": "normal"
+      },
+      {
+        "day": "2026-09-24",
+        "n_setups": 1,
+        "avg_btc_24h_before": -2.4817410139869884,
+        "symbols": [
+          "RAYUSDT"
+        ],
+        "dirs": {
+          "SHORT": 1
+        },
+        "note": "normal"
+      },
+      {
+        "day": "2026-09-25",
+        "n_setups": 1,
+        "avg_btc_24h_before": 1.0343329611505692,
+        "symbols": [
+          "MARSCOINUSDT"
+        ],
+        "dirs": {
+          "LONG": 1
+        },
+        "note": "normal"
+      },
+      {
+        "day": "2026-09-27",
+        "n_setups": 1,
+        "avg_btc_24h_before": 1.110051310996554,
+        "symbols": [
+          "TUTUSDT"
+        ],
+        "dirs": {
+          "LONG": 1
+        },
+        "note": "normal"
+      },
+      {
+        "day": "2026-09-28",
+        "n_setups": 1,
+        "avg_btc_24h_before": -1.2973353279582556,
+        "symbols": [
+          "QNTUSDT"
+        ],
+        "dirs": {
+          "SHORT": 1
+        },
+        "note": "normal"
+      },
+      {
+        "day": "2026-09-30",
+        "n_setups": 1,
+        "avg_btc_24h_before": 0.35891118712178083,
+        "symbols": [
+          "QNTUSDT"
+        ],
+        "dirs": {
+          "SHORT": 1
+        },
+        "note": "normal"
+      }
+    ]
+  },
+  "recommendation_policy_for_other_agents": {
+    "goal": "Recommend futures trades that look and manage like Cosmas, without blindly copying invalid geometry or ignoring majors context.",
+    "output_format": {
+      "symbol": "XYZUSDT",
+      "direction": "LONG|SHORT",
+      "entry": "CMP",
+      "stop_loss": "number",
+      "take_profit": "number",
+      "leverage": "7x|10x typically",
+      "tags": [
+        "Scalping|Night research|volatility warning"
+      ],
+      "rationale": [
+        "setup structure",
+        "BTC/ETH regime",
+        "ecosystem note",
+        "risk plan"
+      ],
+      "risk_plan": [
+        "invalidates if SL trades",
+        "take partial at +1R",
+        "leave runner to TP"
+      ]
+    },
+    "hard_filters": [
+      "Valid geometry only",
+      "Symbol must be tradeable on target venue",
+      "Live mark between SL and TP",
+      "Live planned R:R >= 1.0 for NEW suggestions (stricter than auto-follow)",
+      "Leverage <= 15x unless user overrides",
+      "Do not recommend if BTC crash/squeeze would immediately invalidate a crowded high-beta book"
+    ],
+    "soft_preferences": [
+      "CMP entries",
+      "7x-10x leverage",
+      "Wide structural stops (roughly Cosmas median band, adapted to the coin ATR/swing)",
+      "Asymmetric TP (multi-R runner) plus mandatory profit-taking plan",
+      "Symbols in Cosmas-like universes: liquid alts, SOL memes, new listings, selective majors"
+    ],
+    "risk_management_required_in_every_call": [
+      "State SL as invalidation",
+      "State what +1R price is and advise secure/partial there",
+      "State max account risk if SL hits",
+      "Mention BTC/ETH context in one line",
+      "Mention volatility/manipulation caveat in Cosmas voice when leverage>=10 or stop is tight vs ATR"
+    ]
+  },
+  "learning_progress": {
+    "phases": [
+      {
+        "phase": 1,
+        "name": "corpus_ingest",
+        "status": "complete",
+        "detail": "Ingested 462 trade-like Cosmas messages into cosmas_study.json"
+      },
+      {
+        "phase": 2,
+        "name": "geometry_and_templates",
+        "status": "complete",
+        "detail": "Identified 45 valid-geometry setups; mined message templates and coaching phrases"
+      },
+      {
+        "phase": 3,
+        "name": "outcome_scoring",
+        "status": "complete",
+        "detail": "1h first-touch scoring; +1R-before-SL edge=0.6666666666666666; full TP win rate=0.1"
+      },
+      {
+        "phase": 4,
+        "name": "btc_eth_ecosystem_context",
+        "status": "complete",
+        "detail": "Tagged ecosystems and correlated setups with BTC/ETH 24h regimes"
+      },
+      {
+        "phase": 5,
+        "name": "headline_news_graph",
+        "status": "in_progress",
+        "detail": "Not yet binding discrete news headlines to each signal; currently using BTC/ETH regime + volatility coaching as news/risk proxy. Next: attach dated macro/crypto headline feeds to hot_days."
+      },
+      {
+        "phase": 6,
+        "name": "live_scanner_recommendations",
+        "status": "pending",
+        "detail": "Scanner not enabled yet; this document is the instruction set for recommendation agents."
+      }
+    ],
+    "metrics_snapshot": {
+      "valid_setups": 45,
+      "cmp_share": 0.711,
+      "median_rr": 8.886734693877552,
+      "median_stop_pct": 29.76516352110647,
+      "median_tp_pct": 106.1005770816158,
+      "leverage_avg": 7.4,
+      "oneR_edge": 0.6666666666666666,
+      "btc_align": {
+        "btc_chop": 4,
+        "with_btc_trend": 7,
+        "counter_btc": 3,
+        "unknown": 31
+      }
+    },
+    "next_experiments": [
+      "ATR-normalized stop distances vs Cosmas absolute % stops",
+      "Win rate conditioned on with_btc_trend vs counter_btc",
+      "Separate models for meme/new-listing vs majors",
+      "Attach news headlines to hot_days and measure pre/post volatility"
+    ]
+  },
+  "worked_examples_valid_geometry": [
+    {
+      "id": "-1002004401199:21842",
+      "date": "2026-09-30T18:07:49Z",
+      "symbol": "QNTUSDT",
+      "direction": "SHORT",
+      "entry": 298.35,
+      "stop": 311.0,
+      "tp": 270.0,
+      "tps": [
+        270.0
+      ],
+      "leverage": 10.0,
+      "cmp": true,
+      "stop_pct": 4.239986592927761,
+      "tp_pct": 9.502262443438921,
+      "rr": 2.2411067193675946,
+      "ecosystem": [
+        "interop",
+        "enterprise"
+      ],
+      "btc_ret_24h_before": 0.35891118712178083,
+      "eth_ret_24h_before": -0.6127250864717932,
+      "btc_ret_24h_after": -0.5411486269887966,
+      "eth_ret_24h_after": 0.20164226421856662,
+      "btc_align": "btc_chop",
+      "raw": "Qnt /usdt\nShort position \nEntry CMP \nTp 270\nSl 311\nLeverage 10x \n\ud83d\udc49\ud83d\udc49Scalping \nBecareful of volatility",
+      "one_r_outcome": null
+    },
+    {
+      "id": "-1002004401199:21831",
+      "date": "2026-09-28T15:11:11Z",
+      "symbol": "QNTUSDT",
+      "direction": "SHORT",
+      "entry": 229.66,
+      "stop": 248.0,
+      "tp": 120.0,
+      "tps": [
+        120.0
+      ],
+      "leverage": 10.0,
+      "cmp": false,
+      "stop_pct": 7.985718017939565,
+      "tp_pct": 47.74884612035182,
+      "rr": 5.979280261723009,
+      "ecosystem": [
+        "interop",
+        "enterprise"
+      ],
+      "btc_ret_24h_before": -1.2973353279582556,
+      "eth_ret_24h_before": -0.45186771990896035,
+      "btc_ret_24h_after": -0.3507672959597594,
+      "eth_ret_24h_after": -0.14420795833660704,
+      "btc_align": "with_btc_trend",
+      "raw": "Qnt/usdt \ud83d\udd25\ud83d\udd25\ud83d\udd25\ud83d\udd25\ud83d\udd25\ud83d\udd25\nShort it down \nTp 120\nSl 248\nLeverage 10x \n\nStrike it down players",
+      "one_r_outcome": null
+    },
+    {
+      "id": "-1002004401199:21822",
+      "date": "2026-09-27T09:09:11Z",
+      "symbol": "TUTUSDT",
+      "direction": "LONG",
+      "entry": 0.02471,
+      "stop": 0.022,
+      "tp": 0.8,
+      "tps": [
+        0.8
+      ],
+      "leverage": 7.0,
+      "cmp": true,
+      "stop_pct": 10.967219749089441,
+      "tp_pct": 3137.555645487657,
+      "rr": 286.0848708487084,
+      "ecosystem": [
+        "new-listing"
+      ],
+      "btc_ret_24h_before": 1.110051310996554,
+      "eth_ret_24h_before": 1.2594308133528749,
+      "btc_ret_24h_after": -2.6737627826070605,
+      "eth_ret_24h_after": -2.7711278239796027,
+      "btc_align": "with_btc_trend",
+      "raw": "Tut/usdt\nLong position \nEntry CMP \nTp 0.8\nSl 0.02200\nScalping \nLeverage 7x \n\n\ud83d\udc49Happy Sunday champions\n\nTrade with Bitunix \n\nhttps://www.bitunix.com/register?vipCode=zzup",
+      "one_r_outcome": null
+    },
+    {
+      "id": "-1002004401199:21808",
+      "date": "2026-09-25T12:46:29Z",
+      "symbol": "MARSCOINUSDT",
+      "direction": "LONG",
+      "entry": 0.12466,
+      "stop": 0.093,
+      "tp": 0.7,
+      "tps": [
+        0.7
+      ],
+      "leverage": 5.0,
+      "cmp": true,
+      "stop_pct": 25.397080057757105,
+      "tp_pct": 461.52735440397873,
+      "rr": 18.17245735944409,
+      "ecosystem": [
+        "meme",
+        "new-listing"
+      ],
+      "btc_ret_24h_before": 1.0343329611505692,
+      "eth_ret_24h_before": 2.5963234488723623,
+      "btc_ret_24h_after": -0.49286115316005763,
+      "eth_ret_24h_after": -1.0385336096866005,
+      "btc_align": "with_btc_trend",
+      "raw": "Marscoin/usdt\nLong position \nEntry CMP \nTp 0.7\nSl 0.09300\nLeverage 5x \nBecareful traders of volatility",
+      "one_r_outcome": null
+    },
+    {
+      "id": "-1002004401199:21796",
+      "date": "2026-09-24T00:45:38Z",
+      "symbol": "RAYUSDT",
+      "direction": "SHORT",
+      "entry": 2.1438,
+      "stop": 2.2,
+      "tp": 1.0,
+      "tps": [
+        1.0
+      ],
+      "leverage": 7.0,
+      "cmp": true,
+      "stop_pct": 2.62151320085829,
+      "tp_pct": 53.35385763597351,
+      "rr": 20.35231316725978,
+      "ecosystem": [
+        "solana",
+        "defi",
+        "dex"
+      ],
+      "btc_ret_24h_before": -2.4817410139869884,
+      "eth_ret_24h_before": -2.822950380005577,
+      "btc_ret_24h_after": 0.3348426168508321,
+      "eth_ret_24h_after": 0.3043322592194718,
+      "btc_align": "with_btc_trend",
+      "raw": "Ray/usdt\nShort position \nEntry CMP \nTp 1\nSl 2.200\nLeverage 7x \nStrike it down \nNight food \nAre you awake \ud83d\ude2a \nGrinding continues",
+      "one_r_outcome": null
+    },
+    {
+      "id": "-1002004401199:21784",
+      "date": "2026-09-22T21:52:12Z",
+      "symbol": "MUBARAKUSDT",
+      "direction": "SHORT",
+      "entry": 0.05375,
+      "stop": 0.09,
+      "tp": 0.023,
+      "tps": [
+        0.023
+      ],
+      "leverage": 5.0,
+      "cmp": true,
+      "stop_pct": 67.44186046511628,
+      "tp_pct": 57.20930232558139,
+      "rr": 0.8482758620689655,
+      "ecosystem": [
+        "meme",
+        "new-listing"
+      ],
+      "btc_ret_24h_before": -0.46300147901645067,
+      "eth_ret_24h_before": -0.7588843677047724,
+      "btc_ret_24h_after": -2.05529623313711,
+      "eth_ret_24h_after": -2.546409246163812,
+      "btc_align": "btc_chop",
+      "raw": "Night risk \nMubarak/usdt\nShort position \nEntry CMP \nTp 0.02300\nSl 0.0900\nLeverage 5x \nBecareful traders of volatility.\n\nWake up to profit lord bless \ud83d\udc4b",
+      "one_r_outcome": null
+    },
+    {
+      "id": "-1002004401199:21754",
+      "date": "2026-09-21T14:53:08Z",
+      "symbol": "ZETAUSDT",
+      "direction": "SHORT",
+      "entry": 0.05386,
+      "stop": 0.074,
+      "tp": 0.023,
+      "tps": [
+        0.023
+      ],
+      "leverage": 7.0,
+      "cmp": true,
+      "stop_pct": 37.39324173783884,
+      "tp_pct": 57.29669513553658,
+      "rr": 1.5322740814299902,
+      "ecosystem": [
+        "unknown/new-listing"
+      ],
+      "btc_ret_24h_before": 6.400362071744762,
+      "eth_ret_24h_before": 5.846663416370654,
+      "btc_ret_24h_after": 0.46860050321238506,
+      "eth_ret_24h_after": 0.2218988989135422,
+      "btc_align": "counter_btc",
+      "raw": "Zeta/usdt\nShort position \nEntry CMP \nTp 0.02300.\nSl 0.07400\nLeverage 7x \nBecareful of volatility",
+      "one_r_outcome": null
+    },
+    {
+      "id": "-1002004401199:21720",
+      "date": "2026-09-20T11:38:18Z",
+      "symbol": "INJUSDT",
+      "direction": "SHORT",
+      "entry": 7.751,
+      "stop": 8.5,
+      "tp": 6.0,
+      "tps": [
+        6.0
+      ],
+      "leverage": 10.0,
+      "cmp": true,
+      "stop_pct": 9.66326925557992,
+      "tp_pct": 22.590633466649468,
+      "rr": 2.3377837116154887,
+      "ecosystem": [
+        "injective",
+        "defi",
+        "cosmos-adjacent"
+      ],
+      "btc_ret_24h_before": -1.0166755460186294,
+      "eth_ret_24h_before": -2.297138525677473,
+      "btc_ret_24h_after": 5.471208874259775,
+      "eth_ret_24h_after": 5.667425685347316,
+      "btc_align": "with_btc_trend",
+      "raw": "Sunday blessings \ud83d\udd25\ud83d\udd25\ud83d\udd25\ud83d\udd25\n\n\ud83d\udc49Boys my mission is we must win \n\nInj/usdt \nShort position \nEntry CMP \nTp 6\nSl 8.50\nLeverage 10x \nStrike it down",
+      "one_r_outcome": null
+    },
+    {
+      "id": "-1002004401199:21718",
+      "date": "2026-09-20T10:22:04Z",
+      "symbol": "INJUSDT",
+      "direction": "SHORT",
+      "entry": 7.751,
+      "stop": 8.5,
+      "tp": 6.0,
+      "tps": [
+        6.0
+      ],
+      "leverage": 10.0,
+      "cmp": true,
+      "stop_pct": 9.66326925557992,
+      "tp_pct": 22.590633466649468,
+      "rr": 2.3377837116154887,
+      "ecosystem": [
+        "injective",
+        "defi",
+        "cosmos-adjacent"
+      ],
+      "btc_ret_24h_before": -1.1174553596720773,
+      "eth_ret_24h_before": -2.537295321304781,
+      "btc_ret_24h_after": 5.124299224896951,
+      "eth_ret_24h_after": 5.625741688228302,
+      "btc_align": "with_btc_trend",
+      "raw": "Inj/usdt \nShort position \nEntry CMP \nTp 6\nSl 8.50\nLeverage 10x \nStrike it down",
+      "one_r_outcome": null
+    },
+    {
+      "id": "-1002004401199:21692",
+      "date": "2026-09-19T05:48:37Z",
+      "symbol": "ARBUSDT",
+      "direction": "SHORT",
+      "entry": 0.22305,
+      "stop": 0.25,
+      "tp": 0.15,
+      "tps": [
+        0.15
+      ],
+      "leverage": 10.0,
+      "cmp": false,
+      "stop_pct": 12.082492714637974,
+      "tp_pct": 32.75050437121722,
+      "rr": 2.7105751391465676,
+      "ecosystem": [
+        "ethereum",
+        "l2",
+        "arbitrum"
+      ],
+      "btc_ret_24h_before": 4.593468959872343,
+      "eth_ret_24h_before": 5.988804013777185,
+      "btc_ret_24h_after": -0.6860390195492767,
+      "eth_ret_24h_after": -1.9364904202895747,
+      "btc_align": "counter_btc",
+      "raw": "Arb/usdt\nShort position \nQuick one\nScalping \nTp 0.1500\nSl 0.2500\nLeverage 10x \nBecareful traders",
+      "one_r_outcome": null
+    },
+    {
+      "id": "-1002004401199:21635",
+      "date": "2026-09-14T21:04:58Z",
+      "symbol": "SIRENUSDT",
+      "direction": "LONG",
+      "entry": 0.02297,
+      "stop": 0.02,
+      "tp": 0.5,
+      "tps": [
+        0.5
+      ],
+      "leverage": 7.0,
+      "cmp": true,
+      "stop_pct": 12.929908576404006,
+      "tp_pct": 2076.7522855899,
+      "rr": 160.6161616161616,
+      "ecosystem": [
+        "unknown/new-listing"
+      ],
+      "btc_ret_24h_before": 1.8773923553328697,
+      "eth_ret_24h_before": 1.4988337088060029,
+      "btc_ret_24h_after": -4.209927319562742,
+      "eth_ret_24h_after": -6.140151009216126,
+      "btc_align": "with_btc_trend",
+      "raw": "Night food\nSiren/usdt \nLong position \nEntry CMP \nTp 0.5\nSl 0.0200\nLeverage 7x \nLets go \nSlow and steady \ud83d\udd25",
+      "one_r_outcome": null
+    },
+    {
+      "id": "-1002004401199:21624",
+      "date": "2026-09-13T10:01:59Z",
+      "symbol": "KOMAUSDT",
+      "direction": "LONG",
+      "entry": 0.020037,
+      "stop": 0.011,
+      "tp": 0.5,
+      "tps": [
+        0.5
+      ],
+      "leverage": 7.0,
+      "cmp": true,
+      "stop_pct": 45.101562110096324,
+      "tp_pct": 2395.3835404501674,
+      "rr": 53.11087750359633,
+      "ecosystem": [
+        "unknown/new-listing"
+      ],
+      "btc_ret_24h_before": -0.8476209819828757,
+      "eth_ret_24h_before": -2.425261894326185,
+      "btc_ret_24h_after": 1.5934815085428027,
+      "eth_ret_24h_after": 1.6660663917542489,
+      "btc_align": "counter_btc",
+      "raw": "Koma/usdt\nLong position \nEntry CMP \nTp 0.5\nSl 0.01100\nLeverage 7x \n\nAm seeing an uptrends \ud83d\udcc8 whales \ud83d\udc0b targeting \nPlay Safe.\n\nDay 2",
+      "one_r_outcome": null
+    },
+    {
+      "id": "-1002004401199:21607",
+      "date": "2026-09-12T06:59:32Z",
+      "symbol": "IOSTUSDT",
+      "direction": "SHORT",
+      "entry": 0.0009706,
+      "stop": 0.00103,
+      "tp": 0.00023,
+      "tps": [
+        0.00023
+      ],
+      "leverage": 7.0,
+      "cmp": true,
+      "stop_pct": 6.119925819080995,
+      "tp_pct": 76.303317535545,
+      "rr": 12.468013468013437,
+      "ecosystem": [
+        "unknown/new-listing"
+      ],
+      "btc_ret_24h_before": -0.00504762890866921,
+      "eth_ret_24h_before": 2.1209208770798686,
+      "btc_ret_24h_after": -0.2303905897093066,
+      "eth_ret_24h_after": -0.2573256400379642,
+      "btc_align": "btc_chop",
+      "raw": "Iost/usdt\nShort position \nEntry CMP \nTp 0.0002300\nSl 0.0010300\nLeverage 7x \n\nMorning food",
+      "one_r_outcome": null
+    },
+    {
+      "id": "-1002004401199:21606",
+      "date": "2026-09-12T06:46:25Z",
+      "symbol": "AKEUSDT",
+      "direction": "LONG",
+      "entry": 0.031333,
+      "stop": 0.00773,
+      "tp": 0.5,
+      "tps": [
+        0.5
+      ],
+      "leverage": 7.0,
+      "cmp": true,
+      "stop_pct": 75.32952478217854,
+      "tp_pct": 1495.7616570389046,
+      "rr": 19.856247087234674,
+      "ecosystem": [
+        "unknown/new-listing"
+      ],
+      "btc_ret_24h_before": -0.00504762890866921,
+      "eth_ret_24h_before": 2.1209208770798686,
+      "btc_ret_24h_after": -0.2303905897093066,
+      "eth_ret_24h_after": -0.2573256400379642,
+      "btc_align": "btc_chop",
+      "raw": "Ake/usdt\nLong position \nEntry CMP \nTp 0.5\nSl 0.007730\nLeverage 7x \n\nMorning food \nLets go \nApply Risk management",
+      "one_r_outcome": null
+    },
+    {
+      "id": "-1002004401199:21586",
+      "date": "2026-09-09T07:20:31Z",
+      "symbol": "METUSDT",
+      "direction": "LONG",
+      "entry": 0.3689,
+      "stop": 0.17,
+      "tp": 2.0,
+      "tps": [
+        2.0
+      ],
+      "leverage": 10.0,
+      "cmp": false,
+      "stop_pct": 53.91705069124424,
+      "tp_pct": 442.1523448088913,
+      "rr": 8.200603318250378,
+      "ecosystem": [
+        "unknown/new-listing"
+      ],
+      "btc_ret_24h_before": null,
+      "eth_ret_24h_before": null,
+      "btc_ret_24h_after": null,
+      "eth_ret_24h_after": null,
+      "btc_align": "unknown",
+      "raw": "Met/usdt\nLong position \nMorning food \nTp 2\nSl 0.1700\nLeverage 10x \nLets go \nAm seeing something \n\nOnce you see profit secure.....",
+      "one_r_outcome": null
+    },
+    {
+      "id": "-1002004401199:21578",
+      "date": "2026-09-08T03:38:30Z",
+      "symbol": "PIPPINUSDT",
+      "direction": "LONG",
+      "entry": 0.01862,
+      "stop": 0.013,
+      "tp": 0.8,
+      "tps": [
+        0.8
+      ],
+      "leverage": 7.0,
+      "cmp": false,
+      "stop_pct": 30.182599355531693,
+      "tp_pct": 4196.455424274974,
+      "rr": 139.03558718861208,
+      "ecosystem": [
+        "meme",
+        "new-listing"
+      ],
+      "btc_ret_24h_before": null,
+      "eth_ret_24h_before": null,
+      "btc_ret_24h_after": null,
+      "eth_ret_24h_after": null,
+      "btc_align": "unknown",
+      "raw": "Hot \ud83d\udd25 \ud83d\udd25\ud83d\udd25 \nCheck out your kaito \n\nPippin/usdt  long\nTp 0.8\nSl 0.013000\nLeverage 7x",
+      "one_r_outcome": null
+    },
+    {
+      "id": "-1002004401199:21576",
+      "date": "2026-09-07T10:15:27Z",
+      "symbol": "PIPPINUSDT",
+      "direction": "LONG",
+      "entry": 0.01862,
+      "stop": 0.013,
+      "tp": 0.8,
+      "tps": [
+        0.8
+      ],
+      "leverage": 7.0,
+      "cmp": true,
+      "stop_pct": 30.182599355531693,
+      "tp_pct": 4196.455424274974,
+      "rr": 139.03558718861208,
+      "ecosystem": [
+        "meme",
+        "new-listing"
+      ],
+      "btc_ret_24h_before": null,
+      "eth_ret_24h_before": null,
+      "btc_ret_24h_after": null,
+      "eth_ret_24h_after": null,
+      "btc_align": "unknown",
+      "raw": "Pippin/usdt\nLong position \nEntry CMP \nTp 0.8\nSl 0.01300\nLeverage 7x",
+      "one_r_outcome": null
+    },
+    {
+      "id": "-1002004401199:21566",
+      "date": "2026-09-06T00:23:19Z",
+      "symbol": "PIPPINUSDT",
+      "direction": "LONG",
+      "entry": 0.01862,
+      "stop": 0.013,
+      "tp": 0.8,
+      "tps": [
+        0.8
+      ],
+      "leverage": 7.0,
+      "cmp": true,
+      "stop_pct": 30.182599355531693,
+      "tp_pct": 4196.455424274974,
+      "rr": 139.03558718861208,
+      "ecosystem": [
+        "meme",
+        "new-listing"
+      ],
+      "btc_ret_24h_before": null,
+      "eth_ret_24h_before": null,
+      "btc_ret_24h_after": null,
+      "eth_ret_24h_after": null,
+      "btc_align": "unknown",
+      "raw": "Pippin/usdt\nLong position \nEntry CMP \nTp 0.8\nSl 0.01300\nLeverage 7x \n\nNight \ud83d\ude34 research let's go \n\nTrade all with Bitunix \n\nhttps://www.bitunix.com/register?vipCode=Uwqq",
+      "one_r_outcome": null
+    },
+    {
+      "id": "-1002004401199:21524",
+      "date": "2026-09-03T06:30:59Z",
+      "symbol": "PONSUSDT",
+      "direction": "LONG",
+      "entry": 0.5695,
+      "stop": 0.44,
+      "tp": 1.5,
+      "tps": [
+        1.5
+      ],
+      "leverage": 10.0,
+      "cmp": false,
+      "stop_pct": 22.739244951712028,
+      "tp_pct": 163.38893766461808,
+      "rr": 7.185328185328185,
+      "ecosystem": [
+        "unknown/new-listing"
+      ],
+      "btc_ret_24h_before": null,
+      "eth_ret_24h_before": null,
+      "btc_ret_24h_after": null,
+      "eth_ret_24h_after": null,
+      "btc_align": "unknown",
+      "raw": "Pons /usdt has a whale's \nAm targeting long \nTp 1.5\nSl 0.4400\nLeverage 10x \nApply Risk management",
+      "one_r_outcome": null
+    },
+    {
+      "id": "-1002004401199:21521",
+      "date": "2026-09-02T06:43:51Z",
+      "symbol": "KAITOUSDT",
+      "direction": "LONG",
+      "entry": 0.356,
+      "stop": 0.25,
+      "tp": 1.5,
+      "tps": [
+        1.5
+      ],
+      "leverage": 10.0,
+      "cmp": true,
+      "stop_pct": 29.7752808988764,
+      "tp_pct": 321.3483146067416,
+      "rr": 10.792452830188681,
+      "ecosystem": [
+        "unknown/new-listing"
+      ],
+      "btc_ret_24h_before": null,
+      "eth_ret_24h_before": null,
+      "btc_ret_24h_after": null,
+      "eth_ret_24h_after": null,
+      "btc_align": "unknown",
+      "raw": "Kaito/usdt\nLong position \nEntry CMP \nTp 1.5\nSl 0.2500\nLeverage 10x \n\nHolding tight \ud83d\udc9f",
+      "one_r_outcome": null
+    }
+  ],
+  "invalid_geometry_examples": [
+    {
+      "date": "2026-09-17T12:48:48Z",
+      "symbol": "ONEUSDT",
+      "direction": "SHORT",
+      "raw": "Afternoon food\nOne/usdt\nShort position \nEntry CMP \nTp 0.000100\nSl 0.0013400\nLeverage 7x \n\nLets go trader's"
+    },
+    {
+      "date": "2026-09-07T09:59:34Z",
+      "symbol": "",
+      "direction": "LONG",
+      "raw": "Hot \ud83d\udd25\ud83d\udd25 \ud83d\udd25 \ud83d\udd25 \nIn profit since September \nKaito to 1.5\nSl 0.2500\n\n\n\ud83d\udc49\ud83d\udc49 Pippin long \nTp 0.9\nSl 0.01300\nLeverage 7x"
+    },
+    {
+      "date": "2026-08-28T16:28:56Z",
+      "symbol": "BTRUSDT",
+      "direction": "SHORT",
+      "raw": "Hot \ud83d\ude0d\ud83d\udd25\ud83d\udd25\ud83d\udd25\ud83d\udd25\ud83d\udd25 \n\nBtr/usdt\nShort position \nTp 0.0600\nSl 0.19500\nLeverage 10x \nLets go"
+    },
+    {
+      "date": "2026-08-28T13:50:38Z",
+      "symbol": "BTRUSDT",
+      "direction": "SHORT",
+      "raw": "Btr/usdt\nShort position \nTp 0.0600\nSl 0.19500\nLeverage 10x \nLets go"
+    },
+    {
+      "date": "2026-08-28T05:21:38Z",
+      "symbol": "",
+      "direction": "SHORT",
+      "raw": "Btr holding \n\ud83d\udc49Good Entry for short\nTp 0.090\nSl 0.19500\n\n\ud83d\udc49Get positioned on Bitunix \n\nhttps://www.bitunix.com/register?vipCode=PnHQ"
+    },
+    {
+      "date": "2026-08-26T06:33:35Z",
+      "symbol": "PROMUSDT",
+      "direction": "SHORT",
+      "raw": "Prom/usdt\nShort it massively \nTp 1.2 \nSl 4.560\nLeverage 10x \nSell it heavier \nScalping means once you see profit secure."
+    },
+    {
+      "date": "2026-08-25T02:39:21Z",
+      "symbol": "",
+      "direction": "LONG",
+      "raw": "Wif long \nTp 0.5\nSl 0.1700\n\nLeverage 7x"
+    },
+    {
+      "date": "2026-08-23T05:03:57Z",
+      "symbol": "ENAUSDT",
+      "direction": "SHORT",
+      "raw": "Ena/usdt \nShort position \nSunday blessings \nTp 0.08\nSl 0.17450\nLeverage 7x \nApply Risk management"
+    },
+    {
+      "date": "2026-08-22T09:44:45Z",
+      "symbol": "USUSDT",
+      "direction": "LONG",
+      "raw": "Gosh \ud83d\udd25\ud83d\udd25\ud83d\udd25\ud83d\udd25\ud83d\udd25\ud83d\udd25\ud83d\udd25\ud83d\udd25\n\n\nWif long \nTp 0.5\nSl 0.1700\n\n\nUs /usdt long\nTp 0.5\nSl 0.019300\n\nDon't miss out on them \nEntry CMP"
+    },
+    {
+      "date": "2026-08-22T09:18:48Z",
+      "symbol": "USUSDT",
+      "direction": "LONG",
+      "raw": "Wif long \nTp 0.5\nSl 0.1700\n\n\nUs /usdt long\nTp 0.5\nSl 0.019300\n\nDon't miss out on them \nEntry CMP"
+    }
+  ],
+  "derived_from_playbook_habits": {
+    "n_valid": 45,
+    "cmp_share": 0.7111111111111111,
+    "dir_mix": {
+      "SHORT": 21,
+      "LONG": 24
+    },
+    "lev_avg": 7.4,
+    "lev_mode_buckets": {
+      "8-15": 10,
+      "<=7": 30
+    },
+    "median_rr": 8.886734693877552,
+    "avg_rr": 34.453793915278744,
+    "median_stop_pct": 29.76516352110647,
+    "median_tp_pct": 106.1005770816158,
+    "p25_stop_pct": 9.66326925557992,
+    "p75_stop_pct": 50.77484047402005,
+    "scalp_share": 0.2222222222222222,
+    "full_tp": 1,
+    "full_sl": 9,
+    "full_win_rate": 0.1,
+    "oneR_hits": 14,
+    "oneR_sl": 7,
+    "oneR_edge": 0.6666666666666666,
+    "oneR_avg_rr_on_winners": 27.432120930113694,
+    "symbols_most_posted": [
+      [
+        "SKRUSDT",
+        5
+      ],
+      [
+        "PIPPINUSDT",
+        4
+      ],
+      [
+        "TRUTHUSDT",
+        3
+      ],
+      [
+        "QNTUSDT",
+        2
+      ],
+      [
+        "TUTUSDT",
+        2
+      ],
+      [
+        "INJUSDT",
+        2
+      ],
+      [
+        "WIFUSDT",
+        2
+      ],
+      [
+        "USUSDT",
+        2
+      ],
+      [
+        "PUMPUSDT",
+        2
+      ],
+      [
+        "ACTUSDT",
+        2
+      ],
+      [
+        "MARSCOINUSDT",
+        1
+      ],
+      [
+        "RAYUSDT",
+        1
+      ]
+    ]
+  },
+  "refresh": {
+    "vps_files": [
+      "/app/data/cosmas_study.json",
+      "/app/data/cosmas_playbook.json",
+      "/app/data/cosmas_strategy_knowledge.json"
+    ],
+    "repo_copy_path_hint": "data/cosmas_strategy_knowledge.json",
+    "scheduler": "6h Cosmas learn job should regenerate this document"
+  }
+}

@@ -45,6 +45,7 @@ def client(responses=None, **kwargs):
     answers = {"/fapi/v1/exchangeInfo": PAIRS,
                "/fapi/v1/positionSide/dual": {"dualSidePosition": False},
                "/fapi/v1/order": {"orderId": 1, "clientOrderId": "fxg-1"}}
+    answers["/fapi/v1/algoOrder"] = {"algoId": 2, "clientAlgoId": "fxg-1-sl"}
     answers.update(responses or {})
     kwargs.setdefault("api_key", "key")
     kwargs.setdefault("secret_key", "secret")
@@ -100,11 +101,12 @@ class TestBinanceTrading(unittest.TestCase):
         c, transport = client()
         result = c.place(OrderRequest("BTCUSDT", LONG, Decimal("0.001"),
                                      stop_price=Decimal("58000"), client_id="fxg-1"))
-        orders = [call for call in transport.calls if "/fapi/v1/order?" in call["url"]]
+        orders = [call for call in transport.calls if any(path in call["url"] for path in ("/fapi/v1/order?", "/fapi/v1/algoOrder?"))]
         self.assertEqual(len(orders), 2)
         self.assertEqual(orders[0]["query"]["type"], ["MARKET"])
         self.assertEqual(orders[1]["query"]["type"], ["STOP_MARKET"])
         self.assertEqual(orders[1]["query"]["closePosition"], ["true"])
+        self.assertEqual(Decimal(orders[1]["query"]["triggerPrice"][0]), Decimal("58000"))
         self.assertEqual(result.venue_order_id, "1")
 
     def test_reduced_close_uses_the_opposite_side(self):
@@ -113,6 +115,36 @@ class TestBinanceTrading(unittest.TestCase):
         order = [call for call in transport.calls if "/fapi/v1/order?" in call["url"]][-1]
         self.assertEqual(order["query"]["side"], ["BUY"])
         self.assertEqual(order["query"]["reduceOnly"], ["true"])
+
+    def test_hedge_close_addresses_the_held_side(self):
+        c, transport = client({"/fapi/v1/positionSide/dual": {"dualSidePosition": True}})
+        c.close(Position("BTCUSDT", SHORT, 0.002, 60000, venue_id="BTCUSDT:SHORT"))
+        order = transport.calls[-1]["query"]
+        self.assertEqual(order["side"], ["BUY"])
+        self.assertEqual(order["positionSide"], ["SHORT"])
+        self.assertNotIn("reduceOnly", order)
+
+    def test_failed_replacement_keeps_the_old_stop(self):
+        c, transport = client({"/fapi/v1/openAlgoOrders": [
+            {"algoId": 7, "orderType": "STOP_MARKET", "positionSide": "BOTH", "side": "SELL"}],
+            "/fapi/v1/algoOrder": {"code": -2021, "msg": "would trigger"}})
+        with self.assertRaises(VenueError):
+            c.set_stop(Position("BTCUSDT", LONG, 0.01, 60000), 59000)
+        self.assertFalse(any(call["method"] == "DELETE" for call in transport.calls))
+
+    def test_failed_entry_protection_submits_reduce_only_close(self):
+        c, transport = client({"/fapi/v1/algoOrder": {"code": -2021, "msg": "would trigger"}})
+        with self.assertRaisesRegex(VenueError, "emergency close submitted"):
+            c.place(OrderRequest("BTCUSDT", LONG, Decimal("0.001"), stop_price=Decimal("59000")))
+        self.assertEqual(transport.calls[-1]["query"]["reduceOnly"], ["true"])
+        self.assertEqual(transport.calls[-1]["query"]["side"], ["SELL"])
+
+    def test_new_stop_is_accepted_before_cancelling_old_one(self):
+        c, transport = client({"/fapi/v1/openAlgoOrders": [
+            {"algoId": 7, "orderType": "STOP_MARKET", "positionSide": "BOTH", "side": "SELL"}]})
+        c.set_stop(Position("BTCUSDT", LONG, 0.01, 60000), 59000)
+        actions = [call["method"] for call in transport.calls if "/fapi/v1/algoOrder?" in call["url"]]
+        self.assertEqual(actions, ["POST", "DELETE"])
 
     def test_bad_size_is_rejected_before_order(self):
         c, transport = client()

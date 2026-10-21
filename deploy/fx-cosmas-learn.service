@@ -1,0 +1,9 @@
+[Unit]
+Description=FX-GLITCH Cosmas strategy learner (one shot)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/fx-glitch
+ExecStart=/bin/bash /opt/fx-glitch/tools/cosmas_learn.sh

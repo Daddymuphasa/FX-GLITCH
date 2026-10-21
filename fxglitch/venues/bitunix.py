@@ -192,7 +192,16 @@ def _env(name: str) -> str:
     return (os.environ.get(name) or "").strip()
 
 
-SLOTS = (1, 2, 3)
+SLOTS = (1, 2, 3, 4, 5)
+
+# Display names when BITUNIX_NAME[_N] is unset.
+DEFAULT_NAMES = {
+    1: "muphasa",
+    2: "merrijeh",
+    3: "ekeson",
+    4: "kazi",
+    5: "KarlaGod",
+}
 
 
 def _slot_n(slot) -> int:
@@ -204,16 +213,16 @@ def _slot_n(slot) -> int:
 
 
 def slot_credentials(slot: int = 1) -> tuple[str, str, str]:
-    """API key, secret, display name for Bitunix account 1–3. Never log these."""
+    """API key, secret, display name for Bitunix account 1–5. Never log these."""
     slot = _slot_n(slot)
     if slot == 1:
         key = _env("BITUNIX_API_KEY") or _env("BITUNIX_API_KEY_1")
         secret = _env("BITUNIX_SECRET_KEY") or _env("BITUNIX_SECRET_KEY_1")
-        name = _env("BITUNIX_NAME") or _env("BITUNIX_NAME_1") or "account-1"
+        name = _env("BITUNIX_NAME") or _env("BITUNIX_NAME_1") or DEFAULT_NAMES[1]
     else:
         key = _env(f"BITUNIX_API_KEY_{slot}")
         secret = _env(f"BITUNIX_SECRET_KEY_{slot}")
-        name = _env(f"BITUNIX_NAME_{slot}") or f"account-{slot}"
+        name = _env(f"BITUNIX_NAME_{slot}") or DEFAULT_NAMES.get(slot, f"account-{slot}")
     return key, secret, name
 
 
@@ -229,12 +238,13 @@ def listed_accounts() -> list[dict]:
     rows = []
     for slot in SLOTS:
         key, secret, name = slot_credentials(slot)
+        ready = bool(key and secret)
         rows.append({
             "id": slot,
             "name": name,
-            "ready": bool(key and secret),
+            "ready": ready,
             "has_access": bool(access_code(slot)),
-            "coming_soon": slot == 3 and not (key and secret),
+            "coming_soon": slot >= 3 and not ready,
         })
     return rows
 
@@ -251,8 +261,10 @@ def from_slot(slot: int = 1) -> "Bitunix":
 class Bitunix(Venue):
     """Bitunix futures. Credentials come from the environment, never arguments.
 
-    Account 1: BITUNIX_API_KEY / BITUNIX_SECRET_KEY
-    Account 2: BITUNIX_API_KEY_2 / BITUNIX_SECRET_KEY_2
+    Account 1 (muphasa): BITUNIX_API_KEY / BITUNIX_SECRET_KEY
+    Account 2 (merrijeh): BITUNIX_API_KEY_2 / BITUNIX_SECRET_KEY_2
+    Account 3 (ekeson): BITUNIX_API_KEY_3 / BITUNIX_SECRET_KEY_3
+    Account 4 (kazi): BITUNIX_API_KEY_4 / BITUNIX_SECRET_KEY_4
     They are read here, used to sign, and never logged, echoed or written
     anywhere. Public endpoints work without them.
     """
@@ -634,23 +646,38 @@ class Bitunix(Venue):
             raw=data if isinstance(data, dict) else {},
         )
 
+    def _pending_tpsl(self, symbol: str | None = None) -> list[dict]:
+        rows = self._request(
+            "GET", "/api/v1/futures/tpsl/get_pending_orders",
+            query={"symbol": symbol, "limit": 100},
+            private=True,
+        )
+        if isinstance(rows, dict):
+            rows = rows.get("orderList") or rows.get("list") or []
+        return [r for r in (rows or []) if isinstance(r, dict)]
+
+    @staticmethod
+    def _tpsl_oid(row: dict) -> str:
+        # Pending TP/SL docs return `id`; some payloads also send `orderId`.
+        return str(row.get("orderId") or row.get("id") or "")
+
+    @staticmethod
+    def _stop_is_tight(current: float | None, wanted: float, side: str) -> bool:
+        if current is None:
+            return False
+        if side == "SHORT":
+            return current <= wanted * 1.0005
+        return current >= wanted * 0.9995
+
     def stops(self, symbol: str | None = None) -> dict[str, float]:
         """Current stop price per positionId, read from the exchange.
 
         Needed because `positions()` does not report the stop, and a trailing
         stop has to be compared against what is actually resting there. Our own
         memory of it is a belief; this is the record.
-
-        DOC CAVEAT: Cloudflare blocks the tp_sl doc pages to non-browser
-        clients, so the field names below come from search results rather than
-        a page I could read end to end. Parsing is therefore defensive - an
-        unexpected shape yields "no stop known" instead of a crash, and the
-        caller treats that as a reason to be careful rather than as zero.
         """
-        rows = self._request("GET", "/api/v1/futures/tpsl/get_pending_orders",
-                             query={"symbol": symbol}, private=True)
         out: dict[str, float] = {}
-        for row in rows or []:
+        for row in self._pending_tpsl(symbol):
             pid = str(row.get("positionId", "") or "")
             raw = row.get("slPrice") or row.get("stopLossPrice")
             if not pid or raw in (None, "", "0"):
@@ -663,10 +690,8 @@ class Bitunix(Venue):
 
     def targets(self, symbol: str | None = None) -> dict[str, float]:
         """Current take-profit price per positionId."""
-        rows = self._request("GET", "/api/v1/futures/tpsl/get_pending_orders",
-                             query={"symbol": symbol}, private=True)
         out: dict[str, float] = {}
-        for row in rows or []:
+        for row in self._pending_tpsl(symbol):
             pid = str(row.get("positionId", "") or "")
             raw = row.get("tpPrice") or row.get("takeProfitPrice")
             if not pid or raw in (None, "", "0"):
@@ -680,11 +705,10 @@ class Bitunix(Venue):
     def set_stop(self, position: Position, stop_price: Decimal | float) -> OrderResult:
         """Move the stop on an open position.
 
-        Tries modify first, then place. A position opened with `slPrice`
-        already has a resting stop to modify, but one opened by hand in the app
-        may not, and the difference is not visible from here. Trying both in
-        order costs one wasted call in the uncommon case and avoids silently
-        failing to protect a position in the other.
+        Modify often returns accepted with a null orderId while the resting
+        stop stays put. Pending rows key the order as `id`. Cancel must send
+        that id plus symbol, then place a fresh position TP/SL (one per
+        position) keeping the existing take-profit.
         """
         if not position.venue_id:
             raise VenueError("bitunix", "no-position-id",
@@ -693,21 +717,106 @@ class Bitunix(Venue):
         instrument = self.instruments().get(position.symbol)
         price = (instrument.round_price(stop_price) if instrument
                  else Decimal(str(stop_price)))
+        wanted = float(price)
+        side = position.side
+        pid = str(position.venue_id)
+        rows = [r for r in self._pending_tpsl(position.symbol)
+                if str(r.get("positionId", "") or "") == pid]
+        tp_price = None
+        tp_stop = "MARK_PRICE"
+        for row in rows:
+            raw_tp = row.get("tpPrice") or row.get("takeProfitPrice")
+            if raw_tp not in (None, "", "0"):
+                tp_price = str(raw_tp)
+                if row.get("tpStopType"):
+                    tp_stop = str(row.get("tpStopType"))
+
         payload = {
             "symbol": position.symbol,
-            "positionId": position.venue_id,
+            "positionId": pid,
             "slPrice": str(price),
             "slStopType": "MARK_PRICE",
         }
+        if tp_price:
+            payload["tpPrice"] = tp_price
+            payload["tpStopType"] = tp_stop
+
+        data = None
         try:
             data = self._request("POST", "/api/v1/futures/tpsl/position/modify_order",
                                  payload=payload, private=True)
         except VenueError:
-            data = self._request("POST", "/api/v1/futures/tpsl/position/place_order",
-                                 payload=payload, private=True)
-        return OrderResult(accepted=True,
-                           venue_order_id=str((data or {}).get("orderId", "")),
-                           raw=data if isinstance(data, dict) else {})
+            data = None
+        current = self.stops(position.symbol).get(pid)
+        if self._stop_is_tight(current, wanted, side):
+            return OrderResult(
+                accepted=True,
+                venue_order_id=str((data or {}).get("orderId", "") if isinstance(data, dict) else ""),
+                raw=data if isinstance(data, dict) else {},
+            )
+
+        for row in rows:
+            oid = self._tpsl_oid(row)
+            if not oid:
+                continue
+            body = {
+                "orderId": oid,
+                "slPrice": str(price),
+                "slStopType": "MARK_PRICE",
+            }
+            sl_qty = row.get("slQty")
+            if sl_qty not in (None, "", "0"):
+                body["slQty"] = str(sl_qty)
+            raw_tp = row.get("tpPrice") or row.get("takeProfitPrice")
+            if raw_tp not in (None, "", "0"):
+                body["tpPrice"] = str(raw_tp)
+                if row.get("tpStopType"):
+                    body["tpStopType"] = str(row.get("tpStopType"))
+                tp_qty = row.get("tpQty")
+                if tp_qty not in (None, "", "0"):
+                    body["tpQty"] = str(tp_qty)
+            try:
+                data = self._request("POST", "/api/v1/futures/tpsl/modify_order",
+                                     payload=body, private=True)
+            except VenueError:
+                continue
+        current = self.stops(position.symbol).get(pid)
+        if self._stop_is_tight(current, wanted, side):
+            return OrderResult(
+                accepted=True,
+                venue_order_id=str((data or {}).get("orderId", "") if isinstance(data, dict) else ""),
+                raw=data if isinstance(data, dict) else {},
+            )
+
+        for row in rows:
+            oid = self._tpsl_oid(row)
+            if not oid:
+                continue
+            try:
+                self._request("POST", "/api/v1/futures/tpsl/cancel_order",
+                              payload={"symbol": position.symbol, "orderId": oid},
+                              private=True)
+            except VenueError:
+                try:
+                    self._request("POST", "/api/v1/futures/tpsl/cancel_order",
+                                  payload={"orderId": oid}, private=True)
+                except VenueError:
+                    pass
+
+        data = self._request("POST", "/api/v1/futures/tpsl/position/place_order",
+                             payload=payload, private=True)
+        current = self.stops(position.symbol).get(pid)
+        if not self._stop_is_tight(current, wanted, side):
+            raise VenueError(
+                "bitunix", "stop-not-set",
+                f"{position.symbol} stop still {current} wanted {price}",
+                retryable=True,
+            )
+        return OrderResult(
+            accepted=True,
+            venue_order_id=str((data or {}).get("orderId", "") if isinstance(data, dict) else ""),
+            raw=data if isinstance(data, dict) else {},
+        )
 
     def close(self, position: Position, *, reason: str = "") -> OrderResult:
         """Flatten via flash close. Hedge close needs positionId, not a reverse order."""

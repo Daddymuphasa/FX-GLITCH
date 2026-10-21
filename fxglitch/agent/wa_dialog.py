@@ -8,6 +8,7 @@ from __future__ import annotations
 from .access import unlock
 from .inbox import recent_signals
 from .plans import place_plan, plan_by_id, recommend
+from .protection import ACCOUNT_LOCK, observe_account
 from ..venues.base import VenueError
 from ..venues.bitunix import from_slot
 
@@ -33,8 +34,10 @@ HELP = (
     "• *available trades* — current setups\n"
     "• *running trades* — positions currently open\n"
     "• *account balance* — free, used, and total balance\n"
-        "• *yes* — take the newest signal, then choose risk\n"
-        "• *take* — choose a setup to trade\n"
+    "• *yes* — take the newest signal, then choose risk\n"
+    "• *take* — choose a setup to trade\n"
+    "• *auto mate* — automatically take new setups after safety checks\n"
+    "• *auto off* — stop automatic entries\n"
     "• *help* — show this menu\n"
     "• *logout* — sign out"
 )
@@ -93,6 +96,171 @@ def _enrich_signal(row: dict) -> dict:
     return row
 
 
+def _recommend_signal(row: dict, **kwargs):
+    mark = kwargs.pop("mark", row.get("mark"))
+    return recommend(
+        row.get("raw") or "",
+        mark=mark,
+        entry_override=mark if mark is not None else row.get("entry"),
+        stop_override=row.get("stop"),
+        take_profits_override=row.get("take_profits"),
+        **kwargs,
+    )
+
+
+def _live_recommendation(session: dict):
+    venue = from_slot(int(session["account"]))
+    if not venue.authenticated:
+        raise VenueError("bitunix", "no-keys", "this account has no exchange keys")
+    balance = venue.balance()
+    session["equity"] = balance.equity
+    row = session["signal"]
+    symbol = row.get("bitunix_symbol") or row.get("binance_symbol")
+    mark = venue.mark_price(symbol)
+    if mark is None or mark <= 0:
+        raise VenueError("bitunix", "no-price", "could not read a live price; try again")
+    return _recommend_signal(row, mark=mark, balance=balance, instruments=venue.instruments())
+
+
+def _target_fit_label(rec) -> str:
+    for plan in reversed(rec.plans):
+        if plan.get("policy_ok") and plan.get("target_ok"):
+            return plan.get("label") or PLAN_LABEL.get(plan.get("id"), plan.get("id", ""))
+    return ""
+
+
+def _unavailable_plan(session: dict, rec, plan: dict | None) -> str:
+    session.pop("plan", None)
+    session.pop("quote", None)
+    session["step"] = "risk"
+    if not plan or not plan.get("below_minimum"):
+        return (plan or {}).get("policy_reason") or "That risk is not available on this setup."
+    symbol = rec.bitunix_symbol or rec.binance_symbol
+    base = symbol.removesuffix("USDT")
+    lines = [
+        "I did not send this trade.",
+        "",
+        f"The issue: Bitunix will not accept a {symbol} order smaller than "
+        f"{plan['minimum_qty']:g} {base}.",
+        f"Your selected level ({plan['label']}) only allowed about "
+        f"{plan['qty']:g} {base}.",
+        "",
+        "If I forced the exchange minimum, your possible loss at the stop would "
+        f"be about {plan['minimum_loss_if_sl']:.2f} USDT "
+        f"({plan['minimum_risk_pct']:.2f}% of your account), which is higher "
+        "than the risk level you chose.",
+        "",
+        "So I skipped it to avoid taking a bigger trade than you approved.",
+    ]
+    available = [p for p in rec.plans if p.get("policy_ok") and not p.get("below_minimum")]
+    if available:
+        alternative = min(available, key=lambda p: p["risk_pct"])
+        lines.append(
+            f"Smallest valid choice right now: {alternative['label']} "
+            f"({alternative['risk_pct']:g}% risk), about {alternative['qty']:g} "
+            f"{base}, estimated stop loss {alternative['loss_if_sl']:.2f} USDT."
+        )
+        lines.append(
+            f"Reply *{alternative['label'].lower()}* to review it, then *yes* "
+            "if you still want to send. Nothing has been sent."
+        )
+    else:
+        lines.append(
+            "No risk level is valid for this setup with the current account "
+            "balance and exchange minimum. Nothing has been sent."
+        )
+    return "\n".join(lines)
+
+
+def _auto_plan_id(session: dict) -> str:
+    plan = str(session.get("auto_plan") or "mid").lower()
+    return plan if plan in PLAN_LABEL else "mid"
+
+
+def _auto_status(session: dict) -> str:
+    if not session.get("auto_trade"):
+        return (
+            "Auto trade is OFF.\n"
+            "Type *auto mate* to turn it on, or *auto mate low risk* / "
+            "*auto mate average risk* / *auto mate high risk*."
+        )
+    label = PLAN_LABEL.get(_auto_plan_id(session), "Average risk")
+    return (
+        f"Auto trade is ON for {session.get('name') or 'this account'}.\n"
+        f"Risk level: {label}.\n"
+        "I will try new group setups automatically, but only after these "
+        "safety checks pass: live price, balance, exchange minimum, duplicate "
+        "signal, daily-loss, stop-loss, and take-profit.\n"
+        "Stops are checked and trailed by the desk in the background.\n"
+        "Type *auto off* to stop automatic entries."
+    )
+
+
+def _set_auto(session: dict, text: str) -> str:
+    low = text.lower()
+    for phrase, plan in sorted(PLAN_WORDS.items(), key=lambda item: -len(item[0])):
+        if phrase in low:
+            session["auto_plan"] = plan
+            break
+    session.setdefault("auto_plan", "mid")
+    session["auto_trade"] = True
+    session["step"] = "home"
+    return _auto_status(session)
+
+
+def auto_take_signal(session: dict, row: dict) -> str:
+    """Try one automatic entry for one user session.
+
+    This is intentionally the same path as a manual WhatsApp confirmation:
+    live price and account are reread, sizing is recomputed, the exchange
+    minimum is respected, and `place_plan` supplies the duplicate-signal guard.
+    """
+    if not session.get("account") or not session.get("auto_trade"):
+        return ""
+    enriched = _enrich_signal(dict(row))
+    previous_signal = session.get("signal")
+    previous_plan = session.get("plan")
+    previous_quote = session.get("quote")
+    try:
+        session["signal"] = enriched
+        plan_id = _auto_plan_id(session)
+        venue = from_slot(int(session.get("account") or 1))
+        if not venue.authenticated:
+            return "Auto skipped: this account has no Bitunix keys."
+        try:
+            rec = _live_recommendation(session)
+        except (VenueError, OSError) as exc:
+            return f"Auto skipped {enriched.get('bitunix_symbol') or enriched.get('binance_symbol') or 'setup'}: could not verify live price/account ({exc})."
+        plan = plan_by_id(rec, plan_id)
+        if plan is None or not plan.get("policy_ok"):
+            reason = _unavailable_plan(session, rec, plan)
+            return "Auto skipped:\n" + reason
+        try:
+            placed = place_plan(venue, rec, plan, request_id=str(enriched.get("id") or enriched.get("telegram_id") or enriched.get("raw") or ""))
+        except VenueError as exc:
+            return f"Auto skipped {rec.bitunix_symbol or rec.binance_symbol}: {exc}"
+        label = PLAN_LABEL.get(plan_id, plan_id)
+        return (
+            f"Auto sent *{label}* on {venue.account_name}.\n"
+            f"{rec.direction} {placed.get('symbol')} {plan['leverage']}x\n"
+            f"SL {plan['stop']}  TP {plan['take_profit']}\n"
+            f"Order {placed.get('order_id') or 'ok'}"
+        )
+    finally:
+        if previous_signal is None:
+            session.pop("signal", None)
+        else:
+            session["signal"] = previous_signal
+        if previous_plan is None:
+            session.pop("plan", None)
+        else:
+            session["plan"] = previous_plan
+        if previous_quote is None:
+            session.pop("quote", None)
+        else:
+            session["quote"] = previous_quote
+
+
 def format_signals(rows: list[dict] | None = None) -> str:
     rows = rows if rows is not None else _open_signals()
     if not rows:
@@ -134,6 +302,8 @@ def _pick_signal(session: dict, index: int, rows: list[dict]) -> str:
             "Please wait for a complete setup."
         )
     session["signal"] = row
+    session.pop("plan", None)
+    session.pop("quote", None)
     session["step"] = "risk"
     pair = row.get("bitunix_symbol") or row.get("binance_symbol")
     return (
@@ -183,6 +353,8 @@ def format_balance(session: dict) -> str:
     except VenueError as exc:
         return f"Could not read balance: {exc}"
     session["equity"] = float(bal.equity or 0)
+    with ACCOUNT_LOCK:
+        progress = observe_account(venue, bal).progress(bal.equity)
     open_n = 0
     try:
         open_n = len(venue.positions())
@@ -193,6 +365,9 @@ def format_balance(session: dict) -> str:
         f"Free: {float(bal.available):.2f} {bal.currency}\n"
         f"In trades: {float(bal.used):.2f} {bal.currency}\n"
         f"Total: {float(bal.equity):.2f} {bal.currency}\n"
+        f"Today: {progress['daily_gain_pct']:+.2f}% / {progress['daily_target_pct']:.2f}% target\n"
+        f"Week: {progress['weekly_gain_pct']:+.2f}% / {progress['weekly_target_pct']:.0f}% target\n"
+        "Equity change includes open P/L and transfers; not all profit is realised.\n"
         f"Running trades: {open_n}\n\n"
         "1  Available trades\n"
         "2  Running trades"
@@ -247,42 +422,31 @@ def _close_all(session: dict) -> str:
 
 def _execute(session: dict, plan_id: str) -> str:
     row = session.get("signal") or {}
-    raw = row.get("raw") or ""
     slot = int(session.get("account") or 1)
     venue = from_slot(slot)
     if not venue.authenticated:
         return f"{session.get('name') or 'This account'} has no Bitunix keys yet."
-    equity = float(session.get("equity") or 1000)
     try:
-        balance = venue.balance()
-        equity = float(balance.equity or equity)
-    except Exception:
-        balance = None
-    rec = recommend(
-        raw,
-        equity=equity,
-        mark=row.get("mark"),
-        instruments=venue.instruments(),
-        balance=balance,
-    )
+        rec = _live_recommendation(session)
+    except (VenueError, OSError) as exc:
+        return f"Trade not sent: could not verify the live account or price: {exc}"
     plan = plan_by_id(rec, plan_id)
     if plan is None or not plan.get("policy_ok"):
-        return (plan or {}).get("policy_reason") or "That risk is not available on this setup."
+        return _unavailable_plan(session, rec, plan)
+    quote = session.get("quote")
+    if quote and quote.get("id") == plan_id:
+        plan["qty"] = min(plan["qty"], quote["qty"])
     instrument = venue.instruments().get(plan.get("symbol") or rec.bitunix_symbol)
     if instrument and float(plan.get("qty") or 0) < float(instrument.min_qty):
-        return (
-            f"I did not send this trade. {instrument.symbol} requires at least "
-            f"{instrument.min_qty:g} contracts, but {PLAN_LABEL.get(plan_id, plan_id)} "
-            f"risk calculates {float(plan.get('qty') or 0):g}.\n"
-            "Increasing the size would exceed your selected risk, so this setup is skipped."
-        )
+        return _unavailable_plan(session, rec, dict(plan, below_minimum=True))
     try:
-        placed = place_plan(venue, rec, plan)
+        placed = place_plan(venue, rec, plan, request_id=str(row.get("id") or ""))
     except VenueError as exc:
         return f"Bitunix said no: {exc}"
     session["step"] = "home"
     session.pop("signal", None)
     session.pop("plan", None)
+    session.pop("quote", None)
     label = PLAN_LABEL.get(plan_id, plan_id)
     return (
         f"Sent *{label}* on {venue.account_name}.\n"
@@ -334,6 +498,15 @@ def handle(session: dict, text: str) -> str:
         return "That code did not match. Ask the operator for your access code."
 
     rows = _open_signals()
+    if low in ("auto", "automate", "auto mate", "automatic", "auto trading", "autotrade", "auto trade"):
+        return _set_auto(session, low)
+    if low.startswith(("auto mate ", "automate ", "auto trade ", "autotrade ")):
+        return _set_auto(session, low)
+    if low in ("auto status", "automation status"):
+        return _auto_status(session)
+    if low in ("auto off", "automation off", "stop auto", "stop automate", "manual mode"):
+        session["auto_trade"] = False
+        return "Auto trade is OFF. I will still trail/protect running trades in the background."
     # WhatsApp users should not have to guess exact command words. Keep this
     # intentionally small and deterministic: these are navigation requests,
     # not an invitation to interpret trading instructions loosely.
@@ -385,15 +558,35 @@ def handle(session: dict, text: str) -> str:
             session["step"] = "pick"
             return "Pick a setup first. " + format_signals(rows)
         plan_id = PLAN_WORDS[low]
-        session["plan"] = plan_id
-        session["step"] = "confirm"
-        plan = None
-        rec = recommend(session["signal"].get("raw") or "", mark=session["signal"].get("mark"))
+        session.pop("plan", None)
+        session.pop("quote", None)
+        session["step"] = "risk"
+        try:
+            rec = _live_recommendation(session)
+        except (VenueError, OSError) as exc:
+            return f"Cannot price this trade yet: {exc}"
         plan = plan_by_id(rec, plan_id)
+        if plan is None or not plan.get("policy_ok"):
+            return _unavailable_plan(session, rec, plan)
+        session["plan"] = plan_id
+        session["quote"] = dict(plan)
+        session["step"] = "confirm"
         label = PLAN_LABEL[plan_id]
         extra = ""
         if plan:
-            extra = f"\n{plan['leverage']}x · risk {plan['risk_pct']}% · lose ~{plan['loss_if_sl']:.2f}"
+            target_fit = _target_fit_label(rec)
+            target_line = (
+                f"\nEstimated TP gain {plan['profit_if_tp_pct']:.2f}% vs daily target "
+                f"{plan['target_daily_profit_pct']:.2f}%."
+            )
+            if target_fit and not plan.get("target_ok"):
+                target_line += f"\nSmallest target-fit tier: {target_fit}."
+            elif not plan.get("target_ok"):
+                target_line += "\nNo allowed tier reaches the daily target on this setup."
+            extra = (
+                f"\n{plan['leverage']}x · risk {plan['risk_pct']}% · lose ~{plan['loss_if_sl']:.2f}"
+                f"{target_line}"
+            )
         return f"{label} on {session['signal'].get('bitunix_symbol') or session['signal'].get('binance_symbol')}.{extra}\nReply *yes* to send, or *no*."
 
     if low in ("yes", "y", "send", "confirm", "execute"):
@@ -413,5 +606,7 @@ def handle(session: dict, text: str) -> str:
     if low in ("no", "n", "cancel"):
         session["step"] = "home"
         session.pop("plan", None)
+        session.pop("signal", None)
+        session.pop("quote", None)
         return "Cancelled. *signals* to see setups."
     return "I didn’t understand that. Type *available trades*, *running trades*, *account balance*, *take*, or *help*."

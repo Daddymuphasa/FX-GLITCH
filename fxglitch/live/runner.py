@@ -190,7 +190,7 @@ class Runner:
         """One pass. Returns a Decision per symbol, whether or not it acted."""
         now = now or datetime.now(timezone.utc)
 
-        if self.state.halted:
+        if self.state.halted and not self.state.halt_reason.startswith("daily loss"):
             log.warning("HALTED: %s", self.state.halt_reason)
             return [Decision("-", now, "blocked", f"halted: {self.state.halt_reason}")]
 
@@ -218,6 +218,15 @@ class Runner:
         for symbol in symbols:
             try:
                 decisions.append(self._one(symbol, positions, stops, balance, now))
+                if self.live and decisions[-1].sent:
+                    # Reserve accepted entries even before the venue snapshot catches up.
+                    refreshed_balance, refreshed_positions = self._account()
+                    known = {p.symbol for p in refreshed_positions}
+                    pending = [p for p in positions if p.symbol not in known and p.venue_id.startswith("pending:")]
+                    positions = refreshed_positions + pending
+                    reserved = sum(p.notional / p.leverage for p in pending)
+                    balance = Balance(refreshed_balance.currency, refreshed_balance.available - reserved,
+                                      refreshed_balance.used + reserved, refreshed_balance.unrealised_pnl)
             except VenueError as exc:
                 # One bad symbol must not stop the scan. A delisted pair or a
                 # rate-limit on symbol nine is not a reason to skip symbol ten.
@@ -411,9 +420,17 @@ class Runner:
             self.state.mark_decided(symbol, bar.time)
             return Decision(symbol, bar.time, "enter", f"[dry-run] {detail}")
 
+        setter = getattr(self.venue, "set_leverage", None)
+        if setter is not None:
+            setter(symbol, leverage)
         result = self.venue.place(request)
+        if not result.accepted:
+            return self._refuse(symbol, bar, Verdict(False, result.message or "order rejected"))
+        positions.append(Position(symbol, direction, float(qty), entry,
+                                  venue_id=f"pending:{result.venue_order_id}", leverage=leverage))
         self.state.stops[symbol] = float(stop)
         self.state.mark_decided(symbol, bar.time)
+        self.state.save()
         return Decision(symbol, bar.time, "enter", detail, sent=True,
                         order_id=result.venue_order_id)
 
@@ -423,6 +440,8 @@ class Runner:
             self.state.mark_decided(symbol, bar.time)
             return Decision(symbol, bar.time, "exit", f"[dry-run] {detail}")
         result = self.venue.close(held, reason=reason)
+        if not result.accepted:
+            return self._refuse(symbol, bar, Verdict(False, result.message or "close rejected"))
         self.state.stops.pop(symbol, None)
         self.state.mark_decided(symbol, bar.time)
         return Decision(symbol, bar.time, "exit", detail, sent=True,

@@ -19,7 +19,7 @@ class SignalDirection(str, Enum):
     SHORT = "SHORT"
 
 
-_SYMBOL = re.compile(r"\b([A-Za-z0-9]{2,30})\s*/?\s*USDT\b", re.I)
+_SYMBOL = re.compile(r"\b([A-Za-z0-9]{1,30})\s*/?\s*USDT\b", re.I)
 _KNOWN = re.compile(
     r"\b(XAUUSD|XAGUSD|EURUSD|GBPUSD|USDJPY|USDCAD|AUDUSD|NZDUSD|BTCUSD|ETHUSD)\b",
     re.I,
@@ -27,7 +27,7 @@ _KNOWN = re.compile(
 _PRICE = r"\$?([0-9]+(?:\.[0-9]+)?)"
 _TP = re.compile(r"\b(?:tp|take\s*profit)\s*[:=-]?\s*" + _PRICE, re.I)
 _TP_SLOT = re.compile(r"\b(?:tp|take\s*profit)([1-5])\s*[:=-]?\s*" + _PRICE, re.I)
-_SL = re.compile(r"\b(?:sl|stop\s*loss)\s*[:=-]?\s*" + _PRICE, re.I)
+_SL = re.compile(r"\b(?:sl|stop\s*loss)\s*(?:of\s+)?[:=-]?\s*" + _PRICE, re.I)
 _LEV = re.compile(r"\b(?:leverage|lev)\s*[:=-]?\s*([0-9]+(?:\.[0-9]+)?)\s*x?\b", re.I)
 
 
@@ -80,9 +80,19 @@ def parse_signal(message: str) -> ExternalSignal:
         known = _KNOWN.search(text)
         symbol = known.group(1).upper() if known else None
 
+    if symbol is None:
+        # bare Cosmas coin name ("Aster long ...") - only coins seen as X/USDT
+        from .cosmas_coins import bare_symbol
+        symbol = bare_symbol(text)
+
+    if symbol is None:
+        coin_to = re.search(r"\b([A-Za-z]{2,15})\s+to\s+" + _PRICE, text, re.I)
+        if coin_to:
+            symbol = f"{coin_to.group(1).upper()}USDT"
+
     lower = text.lower()
-    has_long = bool(re.search(r"\b(?:long|buy)\b", lower))
-    has_short = bool(re.search(r"\b(?:short|sell)\b", lower))
+    has_long = bool(re.search(r"\b(?:long|buy|uptrend)\b", lower))
+    has_short = bool(re.search(r"\b(?:short|sell|downtrend|dump)\b", lower))
     direction = None
     warnings: list[str] = []
     if has_long and has_short:
@@ -91,8 +101,6 @@ def parse_signal(message: str) -> ExternalSignal:
         direction = SignalDirection.LONG
     elif has_short:
         direction = SignalDirection.SHORT
-    else:
-        warnings.append("direction is missing")
 
     market_entry = bool(re.search(r"\b(?:entry\s*)?cmp\b|current\s+market", lower))
     entry_match = re.search(r"\bentry\s*[:=-]?\s*" + _PRICE, text, re.I)
@@ -105,6 +113,9 @@ def parse_signal(message: str) -> ExternalSignal:
         warnings.append("stop-loss is missing")
 
     take_profit = _decimal(_TP.search(text))
+    if take_profit is None:
+        to_tp = re.search(r"\bto\s+" + _PRICE, text, re.I)
+        take_profit = _decimal(to_tp)
     tps: list[Decimal] = []
     for match in _TP_SLOT.finditer(text):
         try:
@@ -121,6 +132,25 @@ def parse_signal(message: str) -> ExternalSignal:
     stop_adjustment = bool(re.search(r"\badjust\s+(?:your\s+)?sl\b", lower))
     notes = tuple(word for word in ("scalping", "whale", "holding tight")
                   if word in lower)
+
+    if direction is None and not stop_adjustment and not (has_long and has_short) and stop_loss and take_profit:
+        if take_profit > stop_loss:
+            direction = SignalDirection.LONG
+        elif take_profit < stop_loss:
+            direction = SignalDirection.SHORT
+    if direction is None:
+        warnings.append("direction is missing")
+    # sanity: levels must agree with the side
+    if direction is not None and stop_loss and take_profit:
+        if direction == SignalDirection.LONG and not stop_loss < take_profit:
+            warnings.append("levels contradict LONG (SL must be below TP)")
+        if direction == SignalDirection.SHORT and not stop_loss > take_profit:
+            warnings.append("levels contradict SHORT (SL must be above TP)")
+        if entry is not None:
+            if direction == SignalDirection.LONG and not stop_loss < entry < take_profit:
+                warnings.append("entry not between SL and TP for LONG")
+            if direction == SignalDirection.SHORT and not take_profit < entry < stop_loss:
+                warnings.append("entry not between TP and SL for SHORT")
 
     if stop_adjustment:
         warnings.append("message requests a stop adjustment, not a new entry")

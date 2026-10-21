@@ -255,31 +255,32 @@ class Binance(Venue):
                           kind: str, price: Decimal) -> dict:
         """Place a close-position stop or target for an existing position."""
         params = {
+            "algoType": "CONDITIONAL",
             "symbol": order.symbol,
             "side": "SELL" if order.direction == LONG else "BUY",
             "type": kind,
-            "stopPrice": str(instrument.round_price(price)),
+            "triggerPrice": str(instrument.round_price(price)),
             "closePosition": "true", "workingType": "MARK_PRICE",
-            "newClientOrderId": f"{order.client_id}-{'sl' if kind == 'STOP_MARKET' else 'tp'}"
+            "clientAlgoId": f"{order.client_id[:32]}-{'sl' if kind == 'STOP_MARKET' else 'tp'}"
                                if order.client_id else None,
         }
         if self.position_mode() == "HEDGE":
             params["positionSide"] = "LONG" if order.direction == LONG else "SHORT"
-        return self._order(params)
+        return self._request("POST", "/fapi/v1/algoOrder", query=params, private=True)
 
     def stops(self, symbol: str | None = None) -> dict[str, float]:
         """Return resting Binance stop prices keyed like ``Position.venue_id``."""
-        rows = self._request("GET", "/fapi/v1/openOrders",
+        rows = self._request("GET", "/fapi/v1/openAlgoOrders",
                              query={"symbol": symbol}, private=True)
         out: dict[str, float] = {}
         for row in rows or []:
-            if row.get("type") not in ("STOP", "STOP_MARKET"):
+            if row.get("orderType") not in ("STOP", "STOP_MARKET"):
                 continue
             pair = row.get("symbol", symbol)
             side = str(row.get("positionSide", "")).upper()
             if side not in ("LONG", "SHORT"):
                 side = "LONG" if row.get("side") == "SELL" else "SHORT"
-            raw = row.get("stopPrice")
+            raw = row.get("triggerPrice")
             if pair and raw not in (None, "", "0"):
                 out[f"{pair}:{side}"] = float(raw)
         return out
@@ -290,20 +291,28 @@ class Binance(Venue):
         if instrument is None:
             raise VenueError("binance", "unknown-symbol", f"{position.symbol} is not a listed perpetual")
         side = "LONG" if position.direction == LONG else "SHORT"
-        for row in self._request("GET", "/fapi/v1/openOrders",
-                                 query={"symbol": position.symbol}, private=True) or []:
+        old_orders = self._request("GET", "/fapi/v1/openAlgoOrders",
+                                   query={"symbol": position.symbol}, private=True) or []
+        import hashlib
+        suffix = hashlib.sha256(f"{position.venue_id}:{stop_price}".encode()).hexdigest()[:20]
+        request = OrderRequest(position.symbol, position.direction,
+                               Decimal(str(position.qty)), client_id=f"trail-{suffix}")
+        # Confirm the replacement before cancelling any existing protection.
+        data = self._protective_order(request, instrument, "STOP_MARKET", Decimal(str(stop_price)))
+        for row in old_orders:
             row_side = str(row.get("positionSide", "")).upper()
-            if row.get("type") in ("STOP", "STOP_MARKET") and \
-                    (row_side == side or (not row_side and
+            if row.get("orderType") in ("STOP", "STOP_MARKET") and \
+                    row.get("algoId") != data.get("algoId") and \
+                    (row_side == side or (row_side in ("", "BOTH") and
                      ((position.direction == LONG and row.get("side") == "SELL") or
                       (position.direction == SHORT and row.get("side") == "BUY")))):
-                self._request("DELETE", "/fapi/v1/order",
-                              query={"symbol": position.symbol,
-                                     "orderId": row.get("orderId")}, private=True)
-        request = OrderRequest(position.symbol, position.direction,
-                               Decimal(str(position.qty)), client_id=f"trail-{position.venue_id}")
-        data = self._protective_order(request, instrument, "STOP_MARKET", Decimal(str(stop_price)))
-        return OrderResult(accepted=True, venue_order_id=str(data.get("orderId", "")), raw=data)
+                self._request("DELETE", "/fapi/v1/algoOrder",
+                              query={"algoId": row.get("algoId")}, private=True)
+        return OrderResult(accepted=True, venue_order_id=str(data.get("algoId", "")), raw=data)
+
+    def mark_price(self, symbol: str) -> float | None:
+        row = self._request("GET", "/fapi/v1/premiumIndex", query={"symbol": symbol})
+        return float(row.get("markPrice") or 0) or None
 
     def set_leverage(self, symbol: str, leverage: int) -> dict:
         """POST /fapi/v1/leverage — required before a futures market order."""
@@ -327,17 +336,30 @@ class Binance(Venue):
         if not order.is_market:
             params.update(price=str(instrument.round_price(order.price)), timeInForce="GTC")
         if self.position_mode() == "HEDGE":
-            params["positionSide"] = "LONG" if order.direction == LONG else "SHORT"
+            held_direction = -order.direction if order.reduce_only else order.direction
+            params["positionSide"] = "LONG" if held_direction == LONG else "SHORT"
         elif order.reduce_only:
             params["reduceOnly"] = "true"
         data = self._order(params)
         protection = {}
-        if order.stop_price is not None and not order.reduce_only:
-            protection["stop"] = self._protective_order(
-                order, instrument, "STOP_MARKET", order.stop_price)
-        if order.take_profit is not None and not order.reduce_only:
-            protection["takeProfit"] = self._protective_order(
-                order, instrument, "TAKE_PROFIT_MARKET", order.take_profit)
+        try:
+            if order.stop_price is not None and not order.reduce_only:
+                protection["stop"] = self._protective_order(
+                    order, instrument, "STOP_MARKET", order.stop_price)
+            if order.take_profit is not None and not order.reduce_only:
+                protection["takeProfit"] = self._protective_order(
+                    order, instrument, "TAKE_PROFIT_MARKET", order.take_profit)
+        except VenueError as exc:
+            if not order.is_market:
+                raise VenueError("binance", "protection-failed", f"entry {data.get('orderId')} may be live: {exc}") from exc
+            try:
+                self.place(OrderRequest(order.symbol, -order.direction, qty, reduce_only=True,
+                                        client_id=f"{order.client_id[:28]}-abort" if order.client_id else ""))
+            except VenueError as close_exc:
+                raise VenueError("binance", "unprotected-position",
+                                 f"entry {data.get('orderId')} needs attention: protection failed ({exc}); emergency close failed ({close_exc})") from close_exc
+            raise VenueError("binance", "protection-failed",
+                             f"protection failed; emergency close submitted for entry {data.get('orderId')}: {exc}") from exc
         raw = data if isinstance(data, dict) else {}
         if protection:
             raw["protection"] = protection

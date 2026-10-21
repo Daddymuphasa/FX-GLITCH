@@ -1,0 +1,9 @@
+[Unit]
+Description=FX-GLITCH NIL/MANA protect babysit (one shot)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/fx-glitch
+ExecStart=/bin/bash -c 'docker cp /opt/fx-glitch/tools/protect_nil_mana.py fx-glitch-desk-1:/tmp/protect_nil_mana.py; docker exec -w /app -e PYTHONPATH=/app fx-glitch-desk-1 python /tmp/protect_nil_mana.py; systemctl is-active fx-trail'

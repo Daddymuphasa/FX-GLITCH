@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler
 from urllib.parse import parse_qs, urlparse
 
@@ -14,13 +14,15 @@ from ..venues.base import VenueError
 from . import access as access_codes
 from . import auth as passkeys
 from .whatsapp_user import bridge as wa_bridge
-from .inbox import ingest, list_signals, publish_live, replace_signals
+from .inbox import _row_time, ingest, list_signals, publish_live, replace_signals
 from .mcp_server import TOOLS
-from .plans import SIZING_VERSION, place_plan, plan_by_id, proposal_from_plan, recommend
+from .plans import SIZING_VERSION, live_entry_check, place_plan, plan_by_id, proposal_from_plan, recommend
 from .positioning import fetch_briefing
 from .session import from_signal, judge_demo, paper_balance, run_cycle
 from .telegram_in import ingest_update
 from .telegram_user import bridge
+from . import desk_tools
+from . import grok_bot as grok_bot_mod
 
 HACKATHON = {
     "event": "Binance Agent OS Mini Hackathon",
@@ -130,6 +132,150 @@ def _auth_error(exc: Exception, status: int = 400):
     return _json({"error": str(exc)}, status)
 
 
+def _roi(side: str, entry: float, mark: float | None, lev: float) -> float:
+    if not entry or not mark or not lev:
+        return 0.0
+    if side == "SHORT":
+        return (entry - float(mark)) / entry * lev * 100.0
+    return (float(mark) - entry) / entry * lev * 100.0
+
+
+def _public_status(slot: int = 2) -> dict:
+    """Live Cosmas book for the public desk: balance, open tickets, still-good setups."""
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    watching = {}
+    try:
+        watching = bridge.snapshot() or {}
+    except Exception:
+        watching = {}
+    out = {
+        "updated": now,
+        "account": slot,
+        "watching": str(watching.get("status") or ""),
+        "watch_title": ((watching.get("watch") or {}).get("title") or ""),
+        "balance": None,
+        "positions": [],
+        "available": [],
+        "error": None,
+    }
+    venue = _bitunix(slot)
+    marks: dict[str, float] = {}
+    open_keys: set[tuple[str, str]] = set()
+    if not venue.authenticated:
+        out["error"] = "account not linked"
+        return out
+    try:
+        bal = venue.balance()
+        out["balance"] = {
+            "available": round(float(bal.available), 4),
+            "used": round(float(bal.used), 4),
+            "unrealised_pnl": round(float(bal.unrealised_pnl), 4),
+            "equity": round(float(bal.equity), 4),
+            "currency": bal.currency or "USDT",
+        }
+        sls, tps = {}, {}
+        try:
+            sls = venue.stops()
+            tps = venue.targets()
+        except Exception:
+            pass
+        for pos in venue.positions():
+            mark = venue.mark_price(pos.symbol)
+            if mark is not None:
+                marks[pos.symbol] = float(mark)
+            entry = float(pos.entry_price)
+            lev = float(pos.leverage or 1)
+            side = pos.side
+            open_keys.add((pos.symbol, side))
+            out["positions"].append({
+                "symbol": pos.symbol,
+                "side": side,
+                "qty": float(pos.qty),
+                "entry": entry,
+                "mark": None if mark is None else float(mark),
+                "leverage": int(pos.leverage or 0),
+                "sl": sls.get(pos.venue_id),
+                "tp": tps.get(pos.venue_id),
+                "unrealised_pnl": round(float(pos.unrealised_pnl or 0), 4),
+                "roi": round(_roi(side, entry, mark, lev), 1),
+                "liq": pos.liquidation_price,
+            })
+    except VenueError as exc:
+        out["error"] = str(exc)
+        return out
+    except Exception as exc:
+        out["error"] = type(exc).__name__
+        return out
+
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+    for row in list_signals():
+        symbol = row.get("bitunix_symbol") or row.get("binance_symbol")
+        side = str(row.get("direction") or "").upper()
+        if not symbol or side not in ("LONG", "SHORT"):
+            continue
+        if row.get("source") == "demo":
+            continue
+        if (symbol, side) in open_keys:
+            continue
+        when = _row_time(row)
+        if when is None or when < cutoff:
+            continue
+        stop = row.get("stop")
+        tps = row.get("take_profits") or []
+        if stop in (None, "") or not tps:
+            rec = recommend(row.get("raw") or "", equity=1000.0)
+            stop = rec.stop if rec.stop else stop
+            tps = rec.take_profits or tps
+            symbol = rec.bitunix_symbol or rec.binance_symbol or symbol
+            side = str(rec.direction or side).upper()
+        try:
+            stop = float(stop) if stop not in (None, "") else None
+        except (TypeError, ValueError):
+            stop = None
+        tps_f = []
+        for raw_tp in tps:
+            try:
+                tps_f.append(float(raw_tp))
+            except (TypeError, ValueError):
+                continue
+        mark = marks.get(symbol)
+        if mark is None:
+            try:
+                got = venue.mark_price(symbol)
+                if got is not None:
+                    mark = float(got)
+                    marks[symbol] = mark
+            except Exception:
+                mark = None
+        check = None
+        if mark is not None and stop:
+            check = live_entry_check(
+                direction=side, entry=mark, stop=stop, take_profits=tps_f, mark=mark,
+            )
+        still = bool(check["ok"]) if check else False
+        if not still:
+            continue
+        out["available"].append({
+            "id": row.get("id") or row.get("telegram_id"),
+            "symbol": symbol,
+            "side": side,
+            "entry": row.get("entry"),
+            "stop": stop,
+            "take_profit": tps_f[0] if tps_f else None,
+            "mark": mark,
+            "reason": (check or {}).get("reason") or row.get("still_good_reason") or "",
+            "posted_at": row.get("posted_at") or row.get("received_at"),
+            "raw": row.get("raw"),
+            "still_good": True,
+            "bitunix_symbol": symbol,
+            "direction": side,
+            "take_profits": tps_f,
+        })
+        if len(out["available"]) >= 12:
+            break
+    return out
+
+
 def _who(headers: dict) -> dict | None:
     user = access_codes.current_user(headers)
     if user:
@@ -202,6 +348,8 @@ def dispatch(method: str, path: str, query: dict, body: dict, headers: dict | No
         fill = body.get("fill") if isinstance(body.get("fill"), dict) else body
         rows = passkeys.save_fill(user["id"], fill)
         return _json({"ok": True, "fills": rows})
+    if path == "/api/status":
+        return _json(_public_status(2))
     if path == "/api/health":
         if method == "POST" and (body.get("code") or body.get("password") or body.get("logout")):
             if body.get("logout"):
@@ -413,6 +561,48 @@ def dispatch(method: str, path: str, query: dict, body: dict, headers: dict | No
                 return _json({"error": "jid required"}, 400)
             return _json(wa_bridge.chat(jid, str(body.get("text") or "")))
         return _json(wa_bridge.ensure_qr())
+    # Desk operator tools (Grok bot + internal catch-up alerts)
+    if path == "/api/desk/tools" and method == "GET":
+        if not user or not user.get("admin"):
+            return _json({"error": "operator only"}, 401)
+        return _json({"ok": True, "tools": desk_tools.TOOL_SPECS})
+    if path == "/api/desk/status" and method == "GET":
+        if not user or not user.get("admin"):
+            return _json({"error": "operator only"}, 401)
+        status_path = os.path.join(os.path.dirname(__file__), "..", "..", "data", "grok_bot_status.json")
+        status_path = os.path.normpath(status_path)
+        payload = {"ok": True, "grok_bot": "unknown"}
+        try:
+            if os.path.isfile(status_path):
+                with open(status_path, encoding="utf-8") as f:
+                    payload["grok_bot"] = json.load(f)
+        except Exception as exc:
+            payload["grok_bot"] = {"error": str(exc)}
+        return _json(payload)
+    if path == "/api/desk/call" and method == "POST":
+        if not user or not user.get("admin"):
+            return _json({"error": "operator only"}, 401)
+        name = str(body.get("tool") or body.get("name") or "").strip()
+        if not name:
+            return _json({"error": "tool name required"}, 400)
+        args = body.get("arguments") if isinstance(body.get("arguments"), dict) else body.get("args")
+        if not isinstance(args, dict):
+            args = {k: v for k, v in body.items() if k not in ("tool", "name", "arguments", "args")}
+        try:
+            result = desk_tools.call_tool(name, args)
+        except Exception as exc:
+            return _json({"ok": False, "error": f"{type(exc).__name__}: {exc}"}, 500)
+        return _json(result if isinstance(result, dict) else {"ok": True, "result": result})
+    if path == "/api/desk/alert" and method == "POST":
+        # Internal: catch-up timer / trail workers queue operator alerts (no browser auth).
+        text = str(body.get("text") or body.get("message") or "").strip()
+        if not text:
+            return _json({"error": "text required"}, 400)
+        try:
+            grok_bot_mod.queue_alert(text)
+        except Exception as exc:
+            return _json({"ok": False, "error": str(exc)}, 500)
+        return _json({"ok": True})
     if path == "/api/telegram" and method == "POST":
         action = body.get("action")
         if action in ("watch", "password", "qr"):
@@ -431,10 +621,11 @@ def dispatch(method: str, path: str, query: dict, body: dict, headers: dict | No
         if item is None and body.get("message") and not isinstance(body.get("message"), dict):
             item = ingest(str(body.get("message")), source="telegram")
         return _json({"ok": True, "item": item})
-    if path not in ("/api/health", "/api/me", "/api/book", "/api/auth/register", "/api/auth/login",
+    if path not in ("/api/health", "/api/status", "/api/me", "/api/book", "/api/auth/register", "/api/auth/login",
                     "/api/auth/logout", "/api/auth/code", "/api/whatsapp", "/api/account", "/api/hackathon", "/api/tools", "/api/demo",
                     "/api/briefing", "/api/cycle", "/api/signal", "/api/inbox",
-                    "/api/recommend", "/api/execute", "/api/telegram", "/api/signals"):
+                    "/api/recommend", "/api/execute", "/api/telegram", "/api/signals",
+                    "/api/desk/tools", "/api/desk/call", "/api/desk/alert", "/api/desk/status"):
         return _json({"error": "not found"}, 404)
     return _json({"error": "method not allowed"}, 405)
 

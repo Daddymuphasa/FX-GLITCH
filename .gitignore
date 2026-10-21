@@ -48,3 +48,4 @@ data/telegram_watch.json
 *.session
 
 .vercel
+data/tg-link/

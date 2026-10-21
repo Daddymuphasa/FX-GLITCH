@@ -1,0 +1,11 @@
+[Unit]
+Description=FX-GLITCH NIL/MANA babysit hourly
+
+[Timer]
+OnBootSec=5m
+OnUnitActiveSec=1h
+AccuracySec=1m
+Unit=fx-cosmas-babysit.service
+
+[Install]
+WantedBy=timers.target

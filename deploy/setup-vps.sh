@@ -44,6 +44,26 @@ if [ -f data/wa-link/agent.mjs ]; then
   echo "WhatsApp agent installed. Link it at: http://$(hostname -I | awk '{print $1}'):8765/wa.html"
 fi
 
+# Trail + Cosmas background workers (replace Grok Build CLI schedulers)
+mkdir -p /var/log/fx-glitch
+chmod +x deploy/fx-cosmas-catchup.sh 2>/dev/null || true
+chmod +x tools/cosmas_learn.sh 2>/dev/null || true
+if [ -f deploy/fx-trail.service ]; then
+  install -m 0644 deploy/fx-trail.service /etc/systemd/system/fx-trail.service
+fi
+for unit in fx-cosmas-catchup.service fx-cosmas-catchup.timer \
+            fx-cosmas-babysit.service fx-cosmas-babysit.timer \
+            fx-cosmas-learn.service fx-cosmas-learn.timer; do
+  if [ -f "deploy/$unit" ]; then
+    install -m 0644 "deploy/$unit" "/etc/systemd/system/$unit"
+  fi
+done
+systemctl daemon-reload
+systemctl enable --now fx-trail.service 2>/dev/null || true
+systemctl enable --now fx-cosmas-catchup.timer fx-cosmas-babysit.timer fx-cosmas-learn.timer
+echo "Cosmas timers enabled: catchup(5m) babysit(1h) learn(daily 23:30 UTC)."
+echo "Grok operator bot: set FXGLITCH_GROK_BOT=1 and XAI_API_KEY in .env, then recreate desk."
+
 echo "Waiting for /api/health ..."
 i=0
 while [ "$i" -lt 36 ]; do

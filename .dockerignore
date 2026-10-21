@@ -6,6 +6,9 @@ __pycache__
 *.pyc
 .pytest_cache
 .vercel
+.env
+data/*.session
+data/*.session-journal
 data/raw
 data/candles
 data/cache
@@ -14,5 +17,6 @@ reports
 !README.md
 web
 tests
-tools
+tools/*
+!tools/trail_200.py
 .grok

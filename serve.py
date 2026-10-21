@@ -83,6 +83,7 @@ def main() -> None:
     from fxglitch.agent.telegram_bot import bridge as tg_bot
     from fxglitch.agent.telegram_user import bridge
     from fxglitch.agent.whatsapp_user import bridge as wa_bridge
+    from fxglitch.agent.grok_bot import bridge as grok_bot
 
     if _port_open("127.0.0.1", args.port) or (args.host not in ("0.0.0.0", "::") and _port_open(args.host, args.port)):
         print(f"FX-GLITCH already running at {url}")
@@ -93,12 +94,23 @@ def main() -> None:
     public = os.path.join(ROOT, "public")
     Handler.web_root = public if os.path.isdir(public) else os.path.join(ROOT, "web")
     bridge.start()
-    tg_bot.start()
+    # If Grok operator bot uses the same Telegram token, skip Cosmas bot poller
+    # (Telethon user session already owns Cosmas group watch).
+    grok_on = (os.environ.get("FXGLITCH_GROK_BOT") or "").strip() in ("1", "true", "yes", "on")
+    grok_tok = (os.environ.get("FXGLITCH_GROK_BOT_TOKEN") or os.environ.get("TELEGRAM_BOT_TOKEN") or "").strip()
+    tg_tok = (os.environ.get("TELEGRAM_BOT_TOKEN") or "").strip()
+    if grok_on and grok_tok and tg_tok and grok_tok == tg_tok:
+        print("Grok operator bot owns TELEGRAM_BOT_TOKEN; Cosmas group stays on Telethon user watch.")
+    else:
+        tg_bot.start()
+    grok_bot.start()
     wa_bridge.start()
     httpd = ThreadingHTTPServer((args.host, args.port), Handler)
     print(f"FX-GLITCH Agent OS  {url}")
     print("Open http://localhost:%s  (passkeys need localhost, not 127.0.0.1)" % args.port)
     print("Telegram + WhatsApp QR login run in this process.")
+    if grok_on:
+        print("Grok operator bot enabled (FXGLITCH_GROK_BOT=1).")
     print("dry-run by default. MCP: python -m fxglitch.agent.mcp_server")
     if want_open:
         webbrowser.open(url)

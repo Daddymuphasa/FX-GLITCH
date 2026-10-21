@@ -82,6 +82,19 @@ class TestWorstCaseWins(unittest.TestCase):
 
 
 class TestCosts(unittest.TestCase):
+    def test_final_equity_includes_forced_exit_cost(self):
+        result = Backtest(bars([(100, 100, 100, 100)] * 3), BuyOnBar(sl=90), fee_pct=0.1).run()
+        self.assertAlmostEqual(result.final_equity, result.starting_equity + sum(t.pnl for t in result.trades))
+
+    def test_stop_gap_fills_at_worse_open(self):
+        for direction, stop, gap in (("long", 95, 90), ("short", 105, 110)):
+            with self.subTest(direction=direction):
+                result = Backtest(bars([(100, 100, 100, 100), (100, 100, 100, 100),
+                                        (gap, gap, gap, gap)]),
+                                  BuyOnBar(sl=stop, direction=direction)).run()
+                self.assertEqual(result.trades[0].exit_price, gap)
+                self.assertAlmostEqual(result.trades[0].r_multiple, -2)
+
     def test_spread_is_charged_both_ways(self):
         data = bars([
             (100, 101, 99, 100),

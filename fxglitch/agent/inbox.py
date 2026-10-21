@@ -77,7 +77,9 @@ def _load_live() -> list[dict]:
 
 def _with_plans(row: dict) -> dict:
     out = dict(row)
-    rec = recommend(out.get("raw") or "", equity=1000.0, mark=out.get("mark"))
+    rec = recommend(out.get("raw") or "", equity=1000.0, mark=out.get("mark"),
+                    entry_override=out.get("entry"), stop_override=out.get("stop"),
+                    take_profits_override=out.get("take_profits"))
     payload = rec.to_dict()
     out["plans"] = payload.get("plans") or []
     out["entry"] = payload.get("entry")
@@ -85,8 +87,6 @@ def _with_plans(row: dict) -> dict:
     out["take_profits"] = payload.get("take_profits") or []
     out["direction"] = payload.get("direction") or out.get("direction")
     out["binance_symbol"] = payload.get("binance_symbol") or out.get("binance_symbol")
-    if out.get("mark") is None:
-        out["mark"] = payload.get("entry")
     return out
 
 
@@ -169,7 +169,8 @@ def _row_time(row: dict) -> datetime | None:
     if not stamp:
         return None
     try:
-        return datetime.strptime(stamp.replace("Z", ""), "%Y-%m-%dT%H:%M:%S").replace(tzinfo=timezone.utc)
+        parsed = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+        return parsed.replace(tzinfo=timezone.utc) if parsed.tzinfo is None else parsed.astimezone(timezone.utc)
     except ValueError:
         return None
 

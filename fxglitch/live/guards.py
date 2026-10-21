@@ -28,6 +28,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from math import isfinite
 
 from ..venues.base import Balance, Position
 
@@ -124,6 +125,10 @@ def check_balance(balance: Balance, notional: float, leverage: int,
     already holds, which is how a bad hour becomes a liquidation rather than a
     drawdown.
     """
+    if not all(isfinite(x) for x in (balance.equity, balance.available, notional, leverage)):
+        return Verdict(False, "non-finite balance, notional or leverage")
+    if notional <= 0 or leverage < 1:
+        return Verdict(False, "notional must be positive and leverage at least 1x")
     if leverage > limits.max_leverage:
         return Verdict(False, f"{leverage}x exceeds the {limits.max_leverage}x limit")
     margin = notional / max(leverage, 1)
@@ -145,10 +150,12 @@ def check_risk(risk_amount: float, balance: Balance, limits: Limits) -> Verdict:
     enormous, and the account is one bad tick from ruin while every individual
     number still looks reasonable.
     """
-    if balance.equity <= 0:
+    if not isfinite(balance.equity) or balance.equity <= 0:
         return Verdict(False, "no equity", fatal=True)
+    if not isfinite(risk_amount) or risk_amount <= 0:
+        return Verdict(False, "risk must be finite and positive")
     pct = risk_amount / balance.equity * 100.0
-    if pct > limits.max_risk_pct:
+    if pct > limits.max_risk_pct + 1e-9:
         return Verdict(False, f"risking {pct:.2f}% of equity, over the "
                               f"{limits.max_risk_pct:.2f}% ceiling - check the stop distance")
     return ALLOW
@@ -162,10 +169,14 @@ def check_stop(stop_price: float | None, entry_price: float, direction: int,
     loss - and it is exactly what an inverted sign produces. Cheap to check,
     and the kind of bug that only shows up with money on the line.
     """
+    if not isfinite(entry_price) or entry_price <= 0 or direction not in (-1, 1):
+        return Verdict(False, "invalid entry price or direction")
     if stop_price is None:
         if limits.require_stop:
             return Verdict(False, "no stop price - refusing to open an unprotected position")
         return ALLOW
+    if not isfinite(stop_price) or stop_price <= 0:
+        return Verdict(False, "stop must be finite and positive")
     if direction > 0 and stop_price >= entry_price:
         return Verdict(False, f"long stop {stop_price:,.4f} is at or above entry "
                               f"{entry_price:,.4f} - the sign is inverted")

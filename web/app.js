@@ -13,26 +13,67 @@ let selectedId = "";
 let selectedPlan = "mid";
 let currentRec = null;
 let selectedSignal = null;
-const isAdmin = document.documentElement.classList.contains("is-admin");
-const KEYS = "fxg.binance";
+const adminQuery = /(?:^|[?&])admin=1(?:&|$)/.test(location.search);
+let isAdmin = adminQuery;
+let signedIn = false;
+let meName = "";
+const KEYS = "fxg.bitunix";
 const BOOK = "fxg.book";
+let deskBitunix = false;
+let deskAccounts = [];
+let selectedAccount = 1;
 
 function money(n) {
   const v = Number(n) || 0;
   return (v < 0 ? "-" : "") + "$" + Math.abs(v).toFixed(2);
 }
 
+function wipeBrowserKeys() {
+  try {
+    const k = JSON.parse(localStorage.getItem(KEYS) || "{}");
+    delete k.api_key;
+    delete k.secret;
+    localStorage.setItem(KEYS, JSON.stringify({
+      live: !!k.live,
+      equity: k.equity,
+      account: k.account || 1,
+    }));
+  } catch (_err) {}
+  localStorage.removeItem("fxg.binance");
+}
+
 function userKeys() {
   try {
-    return JSON.parse(localStorage.getItem(KEYS) || "{}");
+    const fresh = JSON.parse(localStorage.getItem(KEYS) || "{}");
+    return { live: !!fresh.live, equity: fresh.equity, account: Number(fresh.account) || 1 };
   } catch (_err) {
     return {};
   }
 }
 
 function hasUserKeys() {
-  const k = userKeys();
-  return !!(k.api_key && k.secret);
+  const row = deskAccounts.find((a) => a.id === selectedAccount);
+  return !!(row && row.ready);
+}
+
+function fillAccounts(rows) {
+  deskAccounts = Array.isArray(rows) ? rows : [];
+  deskBitunix = deskAccounts.some((a) => a.ready);
+  const sel = document.getElementById("bx-account");
+  if (!sel) return;
+  sel.innerHTML = "";
+  deskAccounts.forEach((a) => {
+    const opt = document.createElement("option");
+    opt.value = String(a.id);
+    opt.textContent = (a.name || ("account-" + a.id)) + (a.ready ? "" : " · empty");
+    opt.disabled = !a.ready;
+    sel.appendChild(opt);
+  });
+  const saved = Number(userKeys().account) || 1;
+  const ready = deskAccounts.find((a) => a.id === saved && a.ready)
+    || deskAccounts.find((a) => a.ready);
+  selectedAccount = ready ? ready.id : 1;
+  sel.value = String(selectedAccount);
 }
 
 function loadBook() {
@@ -48,12 +89,12 @@ function saveFill(fill) {
   const rows = loadBook();
   rows.unshift(fill);
   localStorage.setItem(BOOK, JSON.stringify(rows.slice(0, 40)));
-  renderBook();
+  renderBook(rows);
 }
 
-function renderBook() {
+function renderBook(rows) {
   if (!bookEl) return;
-  const rows = loadBook();
+  rows = rows || loadBook();
   if (!rows.length) {
     bookEl.innerHTML = "<p class='hint'>No tickets yet. Take a setup and it lands here.</p>";
     return;
@@ -61,16 +102,34 @@ function renderBook() {
   bookEl.innerHTML = rows.map((t) => `
     <div class="item">
       <div class="pair">${t.direction || ""} ${t.symbol || ""} <span class="tag">${t.plan || ""}</span></div>
-      <div class="meta">${t.leverage || ""}x · SL ${t.stop} · TP ${t.take_profit} · ${t.at || ""}</div>
+      <div class="meta">${t.venue || "paper"} · ${t.leverage || ""}x · SL ${t.stop} · TP ${t.take_profit} · ${t.at || ""}</div>
     </div>
   `).join("");
 }
 
 function setFlow(_n) {}
 
+async function readJson(res) {
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch (_err) {
+    const where = res.url || "the API";
+    const snippet = (text || "").replace(/\s+/g, " ").trim().slice(0, 80);
+    if (/The page could not be found|NOT_FOUND|Vercel/i.test(text || "")) {
+      throw new Error(
+        "Login API is still hitting Vercel (HTML 404), not the VPS desk. Point fxglitch.xyz A records to 187.124.113.6, or open http://187.124.113.6:8765 for now."
+      );
+    }
+    throw new Error(
+      `The website API returned a page instead of JSON (${res.status} from ${where}: ${snippet || "empty"}). Point DNS to the VPS or redeploy the API.`
+    );
+  }
+}
+
 async function get(url) {
-  const res = await fetch(url);
-  const data = await res.json();
+  const res = await fetch(url, { credentials: "include" });
+  const data = await readJson(res);
   if (!res.ok) throw new Error(data.error || res.statusText);
   return data;
 }
@@ -78,12 +137,152 @@ async function get(url) {
 async function post(url, body) {
   const res = await fetch(url, {
     method: "POST",
+    credentials: "include",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body || {}),
   });
-  const data = await res.json();
+  const data = await readJson(res);
   if (!res.ok) throw new Error(data.error || res.statusText);
   return data;
+}
+
+function b64urlToBuf(s) {
+  const pad = "=".repeat((4 - (s.length % 4)) % 4);
+  const raw = atob(s.replace(/-/g, "+").replace(/_/g, "/") + pad);
+  const buf = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) buf[i] = raw.charCodeAt(i);
+  return buf.buffer;
+}
+
+function bufToB64url(buf) {
+  const bytes = new Uint8Array(buf);
+  let s = "";
+  bytes.forEach((b) => { s += String.fromCharCode(b); });
+  return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+function revivePublicKey(options) {
+  const opts = JSON.parse(JSON.stringify(options));
+  opts.challenge = b64urlToBuf(opts.challenge);
+  if (opts.user && opts.user.id) opts.user.id = b64urlToBuf(opts.user.id);
+  (opts.excludeCredentials || []).forEach((c) => { c.id = b64urlToBuf(c.id); });
+  (opts.allowCredentials || []).forEach((c) => { c.id = b64urlToBuf(c.id); });
+  return opts;
+}
+
+function credToJSON(cred) {
+  const out = {
+    id: cred.id,
+    rawId: bufToB64url(cred.rawId),
+    type: cred.type,
+    response: {
+      clientDataJSON: bufToB64url(cred.response.clientDataJSON),
+    },
+    clientExtensionResults: cred.getClientExtensionResults ? cred.getClientExtensionResults() : {},
+  };
+  if (cred.response.attestationObject) {
+    out.response.attestationObject = bufToB64url(cred.response.attestationObject);
+  }
+  if (cred.response.authenticatorData) {
+    out.response.authenticatorData = bufToB64url(cred.response.authenticatorData);
+  }
+  if (cred.response.signature) {
+    out.response.signature = bufToB64url(cred.response.signature);
+  }
+  if (cred.response.userHandle) {
+    out.response.userHandle = bufToB64url(cred.response.userHandle);
+  }
+  return out;
+}
+
+function applySession(me) {
+  signedIn = !!(me && me.signed_in);
+  isAdmin = !!(me && me.admin) || adminQuery;
+  meName = (me && me.name) || "";
+  document.documentElement.classList.toggle("is-user", signedIn);
+  document.documentElement.classList.toggle("is-admin", isAdmin);
+  if (signedIn) document.documentElement.classList.remove("is-peek");
+  else document.documentElement.classList.add("is-peek");
+  const who = document.getElementById("who");
+  const acct = me && me.account ? " · acct " + me.account : "";
+  if (who) who.textContent = signedIn ? (meName + acct + (isAdmin ? " · operator" : "")) : "";
+  if (me && me.account) {
+    selectedAccount = me.account;
+    const sel = document.getElementById("bx-account");
+    if (sel) {
+      sel.value = String(me.account);
+      sel.disabled = !isAdmin;
+    }
+    const live = document.getElementById("send-live");
+    if (live && me.via === "access") live.checked = true;
+  }
+}
+
+async function refreshBook() {
+  if (!signedIn) {
+    renderBook(loadBook());
+    return;
+  }
+  try {
+    const box = await get("/api/book");
+    renderBook(box.fills || []);
+  } catch (_err) {
+    renderBook(loadBook());
+  }
+}
+
+function gateMsg(text) {
+  const el = document.getElementById("gate-msg");
+  if (el) el.textContent = text || "";
+}
+
+async function createPasskey() {
+  const name = (document.getElementById("pass-name").value || "").trim();
+  gateMsg("Waiting for your device…");
+  try {
+    const begin = await post("/api/auth/register", { action: "begin", name });
+    const cred = await navigator.credentials.create({ publicKey: revivePublicKey(begin.options) });
+    const me = await post("/api/auth/register", {
+      action: "finish",
+      flow_id: begin.flow_id,
+      credential: credToJSON(cred),
+    });
+    applySession(me);
+    gateMsg("");
+    await afterLogin();
+  } catch (err) {
+    gateMsg(err.message || String(err));
+  }
+}
+
+async function signInPasskey() {
+  const name = (document.getElementById("pass-name").value || "").trim();
+  gateMsg("Waiting for your passkey…");
+  try {
+    const begin = await post("/api/auth/login", { action: "begin", name });
+    const cred = await navigator.credentials.get({ publicKey: revivePublicKey(begin.options) });
+    const me = await post("/api/auth/login", {
+      action: "finish",
+      flow_id: begin.flow_id,
+      credential: credToJSON(cred),
+    });
+    applySession(me);
+    gateMsg("");
+    await afterLogin();
+  } catch (err) {
+    gateMsg(err.message || String(err));
+  }
+}
+
+async function afterLogin() {
+  await refreshBook();
+  paintKeysButton();
+  if (isAdmin) {
+    try {
+      const health = await get("/api/health");
+      fillAccounts(health && health.bitunix_accounts);
+    } catch (_err) {}
+  }
 }
 
 function uniqueSignals(signals) {
@@ -95,8 +294,84 @@ function uniqueSignals(signals) {
     seen.add(key);
     out.push(s);
   });
-  out.sort((a, b) => Number(b.still_good === true) - Number(a.still_good === true));
+  out.sort((a, b) => String(b.posted_at || b.received_at || "").localeCompare(String(a.posted_at || a.received_at || "")));
   return out;
+}
+
+function fmtPx(n) {
+  if (n === null || n === undefined || n === "") return "—";
+  const v = Number(n);
+  if (!Number.isFinite(v)) return "—";
+  return v >= 1 ? v.toFixed(4).replace(/0+$/, "").replace(/\.$/, "") : v.toPrecision(4);
+}
+
+function renderLiveBoard(data) {
+  const watch = document.getElementById("live-watch");
+  const updated = document.getElementById("live-updated");
+  const balEl = document.getElementById("live-balance");
+  const posEl = document.getElementById("live-positions");
+  if (!watch || !updated || !balEl || !posEl) return;
+  const watching = data && data.watching === "watching";
+  watch.textContent = watching ? "watching Cosmas" : (data && data.watching) || "desk";
+  watch.className = "pill" + (watching ? " ok" : " warn");
+  const when = (data && data.updated) ? String(data.updated).replace("T", " ").replace("Z", " UTC") : "";
+  if (data && data.error) updated.textContent = data.error;
+  else updated.textContent = when ? ("Book " + when) : "Live book";
+  const b = (data && data.balance) || null;
+  if (!b) {
+    balEl.innerHTML = "<p class='hint'>Balance unavailable.</p>";
+  } else {
+    const pnl = Number(b.unrealised_pnl) || 0;
+    const pnlCls = pnl > 0 ? "up" : (pnl < 0 ? "down" : "");
+    balEl.innerHTML =
+      "<div class='stat'><small>Available</small><b>" + money(b.available) + "</b></div>" +
+      "<div class='stat'><small>In trades</small><b>" + money(b.used) + "</b></div>" +
+      "<div class='stat'><small>uPnL</small><b class='pnl " + pnlCls + "'>" + money(b.unrealised_pnl) + "</b></div>" +
+      "<div class='stat'><small>Equity</small><b>" + money(b.equity) + "</b></div>";
+  }
+  const rows = (data && data.positions) || [];
+  if (!rows.length) {
+    posEl.innerHTML = "<p class='hint'>No running trades.</p>";
+  } else {
+    posEl.innerHTML = "";
+    rows.forEach((p) => {
+      const div = document.createElement("div");
+      const side = (p.side || "").toUpperCase();
+      const dir = side === "SHORT" ? '<span class="dir short">SHORT</span>' : '<span class="dir long">LONG</span>';
+      const pnl = Number(p.unrealised_pnl) || 0;
+      const pnlCls = pnl > 0 ? "up" : (pnl < 0 ? "down" : "");
+      div.className = "item live-pos";
+      div.innerHTML = "<div class='pair'>" + dir + " " + (p.symbol || "—") +
+        " <span class='tag'>" + (p.leverage || "—") + "x</span></div>" +
+        "<div class='stats'>" +
+        "<div class='stat'><small>Qty</small><b>" + (p.qty ?? "—") + "</b></div>" +
+        "<div class='stat'><small>Entry</small><b>" + fmtPx(p.entry) + "</b></div>" +
+        "<div class='stat'><small>Mark</small><b>" + fmtPx(p.mark) + "</b></div>" +
+        "<div class='stat'><small>SL</small><b>" + fmtPx(p.sl) + "</b></div>" +
+        "<div class='stat'><small>TP</small><b>" + fmtPx(p.tp) + "</b></div>" +
+        "<div class='stat'><small>ROI</small><b class='pnl " + pnlCls + "'>" + (p.roi ?? "—") + "%</b></div>" +
+        "</div>" +
+        "<div class='meta'>uPnL <span class='pnl " + pnlCls + "'>" + money(p.unrealised_pnl) +
+        "</span> · liq " + fmtPx(p.liq) + "</div>";
+      posEl.appendChild(div);
+    });
+  }
+  const available = (data && data.available) || [];
+  if (available.length) renderInbox(available);
+}
+
+async function refreshLiveBoard() {
+  try {
+    renderLiveBoard(await get("/api/status"));
+  } catch (err) {
+    const updated = document.getElementById("live-updated");
+    if (updated) updated.textContent = err.message || "Live book unavailable";
+  }
+}
+
+function startLiveBoard() {
+  refreshLiveBoard();
+  setInterval(refreshLiveBoard, 8000);
 }
 
 function renderInbox(signals) {
@@ -171,7 +446,16 @@ function renderPlans(rec) {
   const chosen = plans.find((p) => p.id === selectedPlan);
   takeBtn.disabled = !chosen || !chosen.policy_ok;
   const tone = chosen && ({ daredevil: "Max", high: "Bold", mid: "Normal", low: "Easy" }[chosen.id] || chosen.label);
-  takeBtn.textContent = chosen ? "Take " + tone : "Take trade";
+  const live = wantLiveSend();
+  const who = (deskAccounts.find((a) => a.id === selectedAccount) || {}).name || ("acct " + selectedAccount);
+  takeBtn.textContent = chosen
+    ? (live ? "Send " + tone + " · " + who : "Take " + tone)
+    : "Take trade";
+}
+
+function wantLiveSend() {
+  const sendBox = document.getElementById("send-live");
+  return !!(isAdmin && sendBox && sendBox.checked && hasUserKeys());
 }
 
 function recFromSignal(s) {
@@ -217,6 +501,7 @@ async function loadRecommend(message, mark) {
     const rec = await post("/api/recommend", {
       message,
       equity: Number(equityEl.value) || 1000,
+      account: selectedAccount,
       mark: mark || (selectedSignal && selectedSignal.mark) || undefined,
     });
     if (rec && (rec.plans || []).length) {
@@ -235,10 +520,8 @@ async function loadRecommend(message, mark) {
 }
 
 async function execute(message, plan, details) {
-  const sendBox = document.getElementById("send-live");
-  const keys = isAdmin ? userKeys() : {};
-  const wantLive = !!(isAdmin && sendBox && sendBox.checked && keys.api_key);
-  msgEl.textContent = "Taking…";
+  const wantLive = wantLiveSend();
+  msgEl.textContent = wantLive ? "Sending to Bitunix…" : "Taking…";
   try {
     const data = await post("/api/execute", {
       message,
@@ -246,21 +529,29 @@ async function execute(message, plan, details) {
       equity: Number(equityEl.value) || 1000,
       confirm: true,
       live: wantLive,
-      api_key: wantLive ? (keys.api_key || "") : "",
-      secret: wantLive ? (keys.secret || "") : "",
+      account: selectedAccount,
     });
     const p = data.plan;
     const rec = data.recommendation || {};
-    saveFill({
+    const symbol = rec.bitunix_symbol || rec.binance_symbol || "";
+    if (data.fills) renderBook(data.fills);
+    else saveFill({
       direction: rec.direction,
-      symbol: rec.binance_symbol,
+      symbol,
       plan: p.label,
       leverage: p.leverage,
       stop: p.stop,
       take_profit: p.take_profit,
+      venue: data.sent ? ("bitunix-" + (data.account || selectedAccount)) : "paper",
       at: new Date().toISOString().slice(11, 16) + " UTC",
     });
-    msgEl.textContent = `${p.label} taken on your desk. ${p.leverage}x ${rec.binance_symbol || ""}. SL ${p.stop} TP ${p.take_profit}.`;
+    if (data.sent) {
+      const oid = data.order && data.order.id ? ` Order ${data.order.id}.` : "";
+      const who = data.account_name || ("account-" + (data.account || selectedAccount));
+      msgEl.textContent = `${p.label} sent to Bitunix ${who}. ${p.leverage}x ${symbol}. SL ${p.stop} TP ${p.take_profit}.${oid}`;
+    } else {
+      msgEl.textContent = `${p.label} paper ticket. ${p.leverage}x ${symbol}. SL ${p.stop} TP ${p.take_profit}. Tick Send live on the desk to place it from .env.`;
+    }
   } catch (err) {
     msgEl.textContent = err.message;
   }
@@ -374,20 +665,67 @@ function fillChats(data) {
 
 function paintKeysButton() {
   const btn = document.getElementById("btn-keys");
-  btn.textContent = hasUserKeys() ? "Binance connected" : "Connect Binance";
+  const nReady = deskAccounts.filter((a) => a.ready).length;
+  const who = (deskAccounts.find((a) => a.id === selectedAccount) || {}).name || ("account-" + selectedAccount);
+  if (btn) btn.textContent = nReady ? ("Bitunix · " + nReady + " .env") : "Bitunix · missing";
+  const pill = document.getElementById("bx-status");
+  if (pill) {
+    pill.textContent = nReady ? ("bitunix: " + who) : "bitunix";
+    pill.classList.toggle("ok", nReady > 0);
+  }
+  const keysHint = document.getElementById("keys-hint");
+  if (keysHint) {
+    keysHint.textContent = nReady
+      ? "Keys stay in .env. Pick account 1 or 2 in the take bar. They never go in the browser."
+      : "Add BITUNIX_API_KEY / BITUNIX_SECRET_KEY and BITUNIX_API_KEY_2 / BITUNIX_SECRET_KEY_2 to .env, then restart.";
+  }
+  const hint = document.getElementById("book-hint");
+  if (hint) {
+    hint.textContent = wantLiveSend()
+      ? "Take sends the selected risk to Bitunix " + who + "."
+      : "Paper until an account is ready in .env and Send live is ticked.";
+  }
+  if (currentRec) {
+    const plans = currentRec.plans || [];
+    const chosen = plans.find((p) => p.id === selectedPlan);
+    const tone = chosen && ({ daredevil: "Max", high: "Bold", mid: "Normal", low: "Easy" }[chosen.id] || chosen.label);
+    if (takeBtn && chosen) {
+      const who = (deskAccounts.find((a) => a.id === selectedAccount) || {}).name || ("acct " + selectedAccount);
+      takeBtn.textContent = wantLiveSend() ? "Send " + tone + " · " + who : "Take " + tone;
+    }
+  }
 }
 
 async function boot() {
-  renderBook();
-  paintKeysButton();
+  wipeBrowserKeys();
+  document.documentElement.classList.add("is-peek");
+  startLiveBoard();
+  try {
+    const health = await get("/api/health");
+    applySession(health.me || { signed_in: false });
+    fillAccounts(health.bitunix_accounts);
+  } catch (_err) {
+    applySession({ signed_in: false });
+  }
+  await refreshBook();
   const savedEq = userKeys().equity;
   if (savedEq) equityEl.value = savedEq;
-  document.getElementById("user-key").value = userKeys().api_key || "";
-  document.getElementById("user-secret").value = userKeys().secret || "";
   document.getElementById("send-live").checked = !!userKeys().live;
   try {
-    await get("/api/health");
+    const health = await get("/api/health");
+    fillAccounts(health && health.bitunix_accounts);
+    deskBitunix = !!(health && health.live_allowed && deskAccounts.some((a) => a.ready));
   } catch (_err) {}
+  paintKeysButton();
+  if (adminQuery || isAdmin) {
+    try { paintWa(await get("/api/whatsapp?action=qr")); } catch (_err) {}
+  }
+  if (isAdmin && hasUserKeys()) {
+    try {
+      const acc = await get("/api/account?account=" + selectedAccount);
+      if (acc && acc.equity) equityEl.value = Math.max(10, Math.round(acc.equity));
+    } catch (_err) {}
+  }
   let box = { signals: [] };
   try {
     box = await refreshInbox();
@@ -429,21 +767,43 @@ document.getElementById("btn-take").onclick = () => {
 document.getElementById("btn-keys").onclick = () => keysDlg.showModal();
 document.getElementById("keys-form").addEventListener("submit", (ev) => {
   if (ev.submitter && ev.submitter.id === "btn-save-keys") {
-    localStorage.setItem(KEYS, JSON.stringify({
-      api_key: document.getElementById("user-key").value.trim(),
-      secret: document.getElementById("user-secret").value.trim(),
-      equity: Number(equityEl.value) || 1000,
-      live: document.getElementById("send-live").checked,
-    }));
+    persistPrefs();
     paintKeysButton();
     if (currentRec) renderPlans(currentRec);
   }
 });
+document.getElementById("send-live").onchange = () => {
+  persistPrefs();
+  paintKeysButton();
+};
+
+function persistPrefs() {
+  localStorage.setItem(KEYS, JSON.stringify({
+    equity: Number(equityEl.value) || 1000,
+    live: document.getElementById("send-live").checked,
+    account: selectedAccount,
+  }));
+}
+
+const accountSel = document.getElementById("bx-account");
+if (accountSel) {
+  accountSel.onchange = async () => {
+    selectedAccount = Number(accountSel.value) || 1;
+    persistPrefs();
+    paintKeysButton();
+    if (isAdmin && hasUserKeys()) {
+      try {
+        const acc = await get("/api/account?account=" + selectedAccount);
+        if (acc && acc.equity) equityEl.value = Math.max(10, Math.round(acc.equity));
+      } catch (_err) {}
+    }
+    if (currentRaw) loadRecommend(currentRaw);
+    if (currentRec) renderPlans(currentRec);
+  };
+}
 
 equityEl.onchange = () => {
-  const k = userKeys();
-  k.equity = Number(equityEl.value) || 1000;
-  localStorage.setItem(KEYS, JSON.stringify(k));
+  persistPrefs();
   if (currentRaw) loadRecommend(currentRaw);
 };
 
@@ -461,6 +821,37 @@ function startQrPoll() {
     } catch (_err) {}
   }, 2000);
 }
+
+function paintWa(snap) {
+  const pill = document.getElementById("wa-pill");
+  const box = document.getElementById("wa-qr");
+  const status = document.getElementById("wa-status");
+  if (pill) {
+    pill.textContent = "whatsapp: " + (snap.status || "");
+    pill.classList.toggle("ok", snap.status === "linked");
+    pill.classList.toggle("warn", snap.status === "need_scan");
+  }
+  if (box) {
+    if (snap.qr) box.innerHTML = `<img alt="WhatsApp QR" src="${snap.qr}" />`;
+    else if (snap.status === "linked") box.textContent = "Linked";
+    else box.textContent = snap.error || "QR";
+  }
+  if (status) {
+    if (snap.status === "linked") status.textContent = "WhatsApp linked as " + (snap.me || "device") + ". Users text this number with their access code.";
+    else if (snap.status === "need_scan") status.textContent = "Scan this QR: WhatsApp → Settings → Linked devices → Link a device.";
+    else if (snap.status === "need_library") status.textContent = "Run: pip install piwapp";
+    else if (snap.status === "vercel") status.textContent = "Link WhatsApp on the local desk, not on the public site.";
+    else if (snap.status === "connecting") status.textContent = "No barcode: WhatsApp blocked this VPS (405). Open /wa.html for live status, or link from this PC.";
+    else status.textContent = snap.error || ("WhatsApp: " + (snap.status || "idle"));
+  }
+}
+
+document.getElementById("btn-wa-qr").onclick = async () => {
+  try { paintWa(await get("/api/whatsapp?action=qr")); } catch (err) {
+    const status = document.getElementById("wa-status");
+    if (status) status.textContent = err.message;
+  }
+};
 
 document.getElementById("btn-qr").onclick = async () => {
   document.getElementById("qr-status").textContent = "Minting a fresh QR…";
@@ -511,6 +902,36 @@ document.getElementById("btn-watch").onclick = async () => {
     chat_id: sel.value,
     title: sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].textContent : "",
   }));
+};
+
+async function enterDesk() {
+  const code = (document.getElementById("access-code").value || "").trim();
+  gateMsg("Checking…");
+  try {
+    const me = await post("/api/auth/code", { code });
+    applySession(me);
+    gateMsg("");
+    await afterLogin();
+  } catch (err) {
+    gateMsg(err.message || String(err));
+  }
+}
+
+document.getElementById("btn-code").onclick = enterDesk;
+document.getElementById("access-code").addEventListener("keydown", (ev) => {
+  if (ev.key === "Enter") enterDesk();
+});
+document.getElementById("btn-register").onclick = createPasskey;
+document.getElementById("btn-login").onclick = signInPasskey;
+document.getElementById("btn-peek").onclick = () => {
+  document.documentElement.classList.add("is-peek");
+};
+document.getElementById("btn-in").onclick = () => {
+  document.documentElement.classList.remove("is-peek");
+};
+document.getElementById("btn-out").onclick = async () => {
+  try { await post("/api/health", { logout: true }); } catch (_err) {}
+  applySession({ signed_in: false });
 };
 
 boot();

@@ -175,7 +175,7 @@ class TelegramBridge:
             return
         api_id, api_hash = creds
         SESSION.parent.mkdir(parents=True, exist_ok=True)
-        self._client = TelegramClient(str(SESSION), api_id, api_hash)
+        self._client = __import__('fxglitch.tgnet',fromlist=['x']).make_client(str(SESSION), api_id, api_hash)
         try:
             await self._client.connect()
             self._debug("connected")
@@ -287,7 +287,7 @@ class TelegramBridge:
             except Exception:
                 title = str(event.chat_id)
             rec = recommend(text, equity=1000.0)
-            mark = rec.mark or fetch_mark(rec.binance_symbol or parsed.symbol)
+            mark = rec.mark or await asyncio.to_thread(fetch_mark, rec.binance_symbol or parsed.symbol)
             if mark and rec.entry is None:
                 rec = recommend(text, equity=1000.0, mark=mark)
             check = live_entry_check(
@@ -378,7 +378,12 @@ class TelegramBridge:
                 scanned += 1
                 posted = msg_time.strftime("%Y-%m-%dT%H:%M:%SZ")
                 rec = recommend(text, equity=1000.0)
-                mark = rec.mark or fetch_mark(rec.binance_symbol or parsed.symbol)
+                # The historical scan can cover hundreds of posts. Only fresh
+                # setups need a live price or an order attempt, and venue I/O
+                # must not block Telethon's new-message event loop.
+                fresh = datetime.now(timezone.utc) - msg_time <= timedelta(hours=4)
+                mark = (rec.mark or await asyncio.to_thread(
+                    fetch_mark, rec.binance_symbol or parsed.symbol)) if fresh else None
                 if mark and rec.entry is None:
                     rec = recommend(text, equity=1000.0, mark=mark)
                 check = live_entry_check(
@@ -404,6 +409,13 @@ class TelegramBridge:
                     posted_at=posted,
                     extra=extra,
                 )
+                from .auto_trade import maybe_execute
+                if fresh:
+                    await asyncio.to_thread(
+                        maybe_execute, text,
+                        telegram_id=f"{chat_id}:{msg.id}",
+                        posted_at=posted,
+                    )
                 if check["ok"]:
                     kept += 1
         except Exception as exc:

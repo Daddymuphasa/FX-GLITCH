@@ -342,6 +342,13 @@ class TestStrategyParity(unittest.TestCase):
 
 
 class TestEntries(unittest.TestCase):
+    def test_capacity_counts_entries_accepted_earlier_in_the_scan(self):
+        venue = FakeVenue()
+        r = Runner(venue, AlwaysBuy, ["BTCUSDT", "ETHUSDT", "SOLUSDT", "A0USDT"],
+                   interval="1d", state=State(), live=True, limits=Limits(max_positions=1))
+        r.cycle(now=NOW + timedelta(hours=1))
+        self.assertEqual(len(venue.placed), 1)
+
     def test_dry_run_computes_everything_and_sends_nothing(self):
         v = FakeVenue()
         [d] = runner(v, live=False).cycle(now=NOW + timedelta(hours=1))
@@ -449,6 +456,14 @@ class TestExitsAndTrailing(unittest.TestCase):
 
 
 class TestSessionGuards(unittest.TestCase):
+    def test_daily_loss_halt_can_roll_to_next_day_in_runner(self):
+        state = State()
+        state.roll_day(10000, NOW)
+        state.halt("daily loss: test")
+        r = runner(FakeVenue(), live=True, state=state)
+        r.cycle(now=NOW + DAY)
+        self.assertFalse(state.halted)
+
     def test_a_stale_feed_blocks_trading(self):
         v = FakeVenue(bars=candles(end=NOW - timedelta(days=10)))
         [d] = runner(v, live=True).cycle(now=NOW)

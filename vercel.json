@@ -1,15 +1,9 @@
 {
   "framework": null,
-  "functions": {
-    "api/*.py": {
-      "maxDuration": 30,
-      "excludeFiles": "{data,docs,strategies,tests,reports,web}/**"
-    }
-  },
   "rewrites": [
-    { "source": "/api/auth/code", "destination": "/api/auth_code" },
-    { "source": "/api/auth/logout", "destination": "/api/auth_logout" },
-    { "source": "/api/auth/login", "destination": "/api/auth_login" },
-    { "source": "/api/auth/register", "destination": "/api/auth_register" }
+    {
+      "source": "/api/:path*",
+      "destination": "http://187.124.113.6:8765/api/:path*"
+    }
   ]
 }

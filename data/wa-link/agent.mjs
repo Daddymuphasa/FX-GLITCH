@@ -31,18 +31,6 @@ async function desk(pathname, opts = {}) {
   }
 }
 
-function signalKey(row) {
-  return row.id || row.raw || JSON.stringify(row);
-}
-
-function withinHours(row, hours) {
-  const stamp = row.posted_at || row.received_at;
-  if (!stamp) return false;
-  const when = Date.parse(String(stamp).replace("Z", "+00:00"));
-  if (Number.isNaN(when)) return false;
-  return Date.now() - when <= hours * 3600 * 1000;
-}
-
 async function start() {
   const { state, saveCreds } = await useMultiFileAuthState(authDir);
   const sock = makeWASocket({
@@ -88,37 +76,18 @@ async function start() {
     }
   });
 
-  const seen = new Set();
   setInterval(async () => {
     try {
-      const box = await desk("/api/inbox");
-      const rows = (box.signals || []).filter(
-        (s) => s.direction && (s.bitunix_symbol || s.binance_symbol) && withinHours(s, 4)
-      );
-      const subs = await desk("/api/whatsapp?action=subscribers");
-      const jids = subs.jids || [];
-      // Do not consume a signal while nobody is subscribed. This lets a user
-      // who links WhatsApp after a restart receive the recent trade.
-      if (!jids.length) return;
-      const fresh = [];
-      for (const row of rows) {
-        const key = signalKey(row);
-        if (!seen.has(key)) fresh.push(row);
-        seen.add(key);
+      const box = await desk("/api/whatsapp?action=alerts");
+      const alerts = box.alerts || [];
+      const jids = box.jids || [];
+      if (!alerts.length || !jids.length) return;
+      for (const text of alerts) {
+        for (const jid of jids) {
+          await sock.sendMessage(jid, { text: String(text) });
+        }
+        console.log("RESULT", String(text).slice(0, 80), "to", jids.length);
       }
-      if (!fresh.length) return;
-      const lines = ["New setups:"];
-      fresh.slice(0, 6).forEach((row, i) => {
-        const pair = row.bitunix_symbol || row.binance_symbol || "?";
-        lines.push(`${i + 1}. ${(row.direction || "").toUpperCase()} ${pair}`);
-      });
-      lines.push("Reply *yes* to take the newest signal, or reply with a number.");
-      lines.push("Then choose *low risk*, *average risk*, *high risk*, or *daredevil*.");
-      const body = lines.join("\n");
-      for (const jid of jids) {
-        await sock.sendMessage(jid, { text: body });
-      }
-      if (jids.length) console.log("ALERT", fresh.length, "to", jids.length);
     } catch (err) {
       console.log("POLL", String(err.message || err).slice(0, 120));
     }
